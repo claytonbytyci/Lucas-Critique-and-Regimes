@@ -1,0 +1,15 @@
+pandas
+numpy
+scipy
+scikit-learn
+statsmodels
+hmmlearn
+xgboost
+matplotlib
+seaborn
+pyarrow
+
+[dev]
+pre-commit
+pytest>=6
+pytest-cov

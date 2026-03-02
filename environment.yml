@@ -1,0 +1,28 @@
+name: lucas-regimes
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python>=3.9
+  - pip
+  - pre-commit
+  - pytest>=6
+  - pytest-cov
+  - setuptools-scm
+  # data
+  - pandas
+  - numpy
+  - scipy
+  - pyarrow
+  # interactive
+  - ipykernel
+  - jupyterlab
+  # plots
+  - matplotlib
+  - seaborn
+  # econometrics / stats
+  - statsmodels
+  # ml / regime models
+  - scikit-learn
+  - xgboost
+  - hmmlearn

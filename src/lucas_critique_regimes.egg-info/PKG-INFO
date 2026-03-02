@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: lucas-critique-regimes
+Version: 0.1.0
+Summary: Regime-switching models and the Lucas Critique: classical vs ML approaches on simulated data
+Author: cab252
+License: MIT
+Requires-Python: >=3.9
+License-File: LICENSE
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: scikit-learn
+Requires-Dist: statsmodels
+Requires-Dist: hmmlearn
+Requires-Dist: xgboost
+Requires-Dist: matplotlib
+Requires-Dist: seaborn
+Requires-Dist: pyarrow
+Provides-Extra: dev
+Requires-Dist: pre-commit; extra == "dev"
+Requires-Dist: pytest>=6; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Dynamic: license-file
