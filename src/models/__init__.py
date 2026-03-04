@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from .hmm import HMMRegimeModel
 from .markov_switching import MarkovSwitchingModel
+from .markov_switching_nn import MarkovSwitchingNeuralNetwork
 from .ml_regime import MLRegimeModel
 from .mixture_experts import MixtureOfExpertsModel
 from .threshold import ThresholdModel
@@ -24,4 +25,5 @@ __all__ = [
     "ThresholdModel",
     "MLRegimeModel",
     "MixtureOfExpertsModel",
+    "MarkovSwitchingNeuralNetwork",
 ]

@@ -39,6 +39,7 @@ from models import (
     MLRegimeModel,
     MixtureOfExpertsModel,
     ThresholdModel,
+    MarkovSwitchingNeuralNetwork,
 )
 from evaluation.metrics import (
     forecast_rmse,
@@ -186,6 +187,13 @@ class LucasCritiqueExperiment:
         models["Threshold (TAR)"] = ThresholdModel()
         models["ML Regime (XGB)"] = MLRegimeModel(n_regimes=2)
         models["Mixture of Experts"] = MixtureOfExpertsModel(n_experts=2)
+        models["MSNN"] = MarkovSwitchingNeuralNetwork(
+            k_regimes=2,
+            hidden_layer_sizes=(32, 16),
+            n_iter=50,
+            mlp_epochs=200,
+            random_state=42,
+        )
 
         return models
 

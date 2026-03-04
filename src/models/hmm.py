@@ -8,12 +8,14 @@ Architecture (two-stage):
        for each inferred regime on the training set.
 
 At prediction time:
-    - The Viterbi algorithm decodes the most likely regime sequence given the
-      new observations.
-    - The corresponding per-regime regressor produces the forecast.
+    - ``predict`` uses a **causal forward filter**: at each step t the regime is
+      inferred from P(s_t | O_{1:t-1}) — the predicted probability that uses
+      only *past* observations, avoiding any look-ahead bias.
+    - ``predict_regimes`` uses the Viterbi algorithm (full sequence) for regime
+      analysis where look-ahead is acceptable.
 
-Note: HMMs require the *full sequence* to decode regimes, so the ``predict``
-and ``predict_regimes`` methods accept sequences rather than individual rows.
+Note: HMMs require the *full sequence* for Viterbi decoding, so
+``predict_regimes`` accepts full sequences.
 """
 
 from __future__ import annotations
@@ -149,8 +151,39 @@ class HMMRegimeModel:
         obs = self._build_obs_matrix(df)
         return self._hmm.predict(obs).astype(int)
 
+    def _causal_log_emission(self, obs: np.ndarray) -> np.ndarray:
+        """Log Gaussian emission probabilities for each (t, k) pair.
+
+        Uses the fitted HMM parameters directly so we can run our own
+        forward filter without calling hmmlearn's Viterbi.
+
+        Returns
+        -------
+        log_emit : (T, K)
+        """
+        K = self.n_components
+        T = len(obs)
+        log_emit = np.empty((T, K))
+        for k in range(K):
+            mu = self._hmm.means_[k]
+            cov = self._hmm.covars_[k]
+            # hmmlearn may store diag covars as 1-D (n_features,) or 2-D
+            # (n_features, n_features); extract diagonal in either case.
+            var = np.diag(cov) if cov.ndim == 2 else np.asarray(cov).ravel()
+            var = np.maximum(var, 1e-6)
+            resid = obs - mu                      # (T, n_features)
+            log_emit[:, k] = -0.5 * np.sum(
+                np.log(2 * np.pi * var) + resid ** 2 / var, axis=1
+            )
+        return log_emit
+
     def predict(self, df: pd.DataFrame) -> np.ndarray:
-        """Predict ``y`` using decoded regime + per-regime regressor.
+        """Predict ``y`` using a causal forward filter — no look-ahead.
+
+        At each step t the regime is chosen as the argmax of
+        P(s_t | O_{1:t-1}), the *predicted* (pre-observation) probability
+        propagated from the previous filtered state.  This avoids using
+        future observations to determine the current regime.
 
         Parameters
         ----------
@@ -162,16 +195,39 @@ class HMMRegimeModel:
         """
         if self._hmm is None:
             raise RuntimeError("Call fit() before predict().")
-        regimes = self.predict_regimes(df)
-        X = self._build_feature_matrix(df)
-        preds = np.empty(len(df))
 
-        for i, reg in enumerate(regimes):
-            regressor = self._regressors.get(reg)
-            if regressor is None:
-                preds[i] = self._global_regressor.predict(X[i : i + 1])[0]
+        obs = self._build_obs_matrix(df)
+        X = self._build_feature_matrix(df)
+        T, K = len(obs), self.n_components
+
+        log_A = np.log(self._hmm.transmat_ + 1e-300)
+        log_emit = self._causal_log_emission(obs)
+
+        # Initialise with the start distribution
+        log_filtered = np.log(self._hmm.startprob_ + 1e-300)
+        preds = np.empty(T)
+
+        for t in range(T):
+            # Predicted probability P(s_t | O_{1:t-1}) — causal, no y_t yet
+            if t == 0:
+                log_pred = log_filtered
             else:
-                preds[i] = regressor.predict(X[i : i + 1])[0]
+                log_pred = np.logaddexp.reduce(
+                    log_filtered[:, None] + log_A, axis=0
+                )
+            log_pred = log_pred - np.logaddexp.reduce(log_pred)
+
+            # Regime assignment from predicted (causal) probability
+            regime = int(log_pred.argmax())
+
+            regressor = self._regressors.get(regime)
+            if regressor is None:
+                preds[t] = self._global_regressor.predict(X[t : t + 1])[0]
+            else:
+                preds[t] = regressor.predict(X[t : t + 1])[0]
+
+            # Update filter with the observed emission at time t
+            log_filtered = log_pred + log_emit[t]
 
         return preds
 

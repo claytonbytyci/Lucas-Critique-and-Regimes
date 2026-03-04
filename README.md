@@ -19,6 +19,7 @@ The Lucas Critique argues that econometric models estimated on historical data b
 | Threshold Autoregression (TAR) | Classical nonlinear | `scipy` / `numpy` |
 | ML Regime Switcher (XGBoost + Clustering) | ML | `scikit-learn`, `xgboost` |
 | Mixture of Experts | ML | `scikit-learn` |
+| Markov Switching Neural Network (MSNN) | ML-classical hybrid | `numpy` (pure) |
 
 ## Experimental Design
 
