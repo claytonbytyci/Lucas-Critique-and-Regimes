@@ -35,6 +35,8 @@ if str(_SRC) not in sys.path:
 
 from simulation import MarkovSwitchingDGP, simulate_pre_post_break, MILD_SHIFT, LucasShift
 from models import (
+    ARMAModel,
+    ARModel,
     HMMRegimeModel,
     MLRegimeModel,
     MixtureOfExpertsModel,
@@ -183,6 +185,11 @@ class LucasCritiqueExperiment:
             except Exception:
                 pass
 
+        # --- Classical parametric baselines (no regime switching) ---
+        models["AR(2) Baseline"] = ARModel(order=2, include_exog=True)
+        models["ARMA(2,1) Baseline"] = ARMAModel(p=2, q=1, trend="c")
+
+        # --- Regime-switching models ---
         models["HMM"] = HMMRegimeModel(n_components=2, random_state=42)
         models["Threshold (TAR)"] = ThresholdModel()
         models["ML Regime (XGB)"] = MLRegimeModel(n_regimes=2)
@@ -208,8 +215,17 @@ class LucasCritiqueExperiment:
         df_train: pd.DataFrame,
         df_pre: pd.DataFrame,
         df_post: pd.DataFrame,
+        pred_store: dict | None = None,
     ) -> ModelEvaluation | None:
-        """Fit on train, evaluate on pre and post."""
+        """Fit on train, evaluate on pre and post.
+
+        Parameters
+        ----------
+        pred_store : dict, optional
+            If provided, raw predictions are stored as
+            ``pred_store[name] = (pred_pre, pred_post)`` for downstream
+            ensemble computation.
+        """
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -241,6 +257,10 @@ class LucasCritiqueExperiment:
         if pred_pre is None or pred_post is None:
             print(f"  [WARN] {name} prediction failed.")
             return None
+
+        # Store raw predictions for ensemble computation
+        if pred_store is not None:
+            pred_store[name] = (pred_pre, pred_post)
 
         # Regime evaluation
         reg_pre = _safe_regimes(df_pre)
@@ -315,10 +335,12 @@ class LucasCritiqueExperiment:
         if verbose:
             print("[2] Training and evaluating models on pre-break data ...")
         evaluations: list[ModelEvaluation] = []
+        pred_store: dict = {}  # stores (pred_pre, pred_post) per model for ensemble
         for name, model in models.items():
             if verbose:
                 print(f"  Fitting {name} ...")
-            result = self._evaluate_model(name, model, df_pre, df_pre, df_post)
+            result = self._evaluate_model(name, model, df_pre, df_pre, df_post,
+                                          pred_store=pred_store)
             if result is not None:
                 evaluations.append(result)
                 if verbose:
@@ -327,6 +349,38 @@ class LucasCritiqueExperiment:
                         f"post_rmse={result.post_rmse:.4f}  "
                         f"LSR={result.lsr:.3f}"
                     )
+
+        # --- Step 3b: Model Average Ensemble ---
+        if len(pred_store) >= 2:
+            y_pre_arr = df_pre["y"].to_numpy()
+            y_post_arr = df_post["y"].to_numpy()
+            avg_pred_pre = np.mean(
+                np.vstack([v[0] for v in pred_store.values()]), axis=0
+            )
+            avg_pred_post = np.mean(
+                np.vstack([v[1] for v in pred_store.values()]), axis=0
+            )
+            # Regime: majority-vote across all stored regime preds (approximate as 0s
+            # since pred_store doesn't hold regimes — use NaN for regime metrics)
+            ens_eval = ModelEvaluation(
+                name="Model Average",
+                pre_rmse=forecast_rmse(y_pre_arr, avg_pred_pre),
+                post_rmse=forecast_rmse(y_post_arr, avg_pred_post),
+                pre_mae=forecast_mae(y_pre_arr, avg_pred_pre),
+                post_mae=forecast_mae(y_post_arr, avg_pred_post),
+                pre_dir_acc=directional_accuracy(y_pre_arr, avg_pred_pre),
+                post_dir_acc=directional_accuracy(y_post_arr, avg_pred_post),
+                pre_regime_acc=float(np.nan),
+                post_regime_acc=float(np.nan),
+                pre_ari=float(np.nan),
+                post_ari=float(np.nan),
+            )
+            evaluations.append(ens_eval)
+            if verbose:
+                print(
+                    f"  Model Average: pre_rmse={ens_eval.pre_rmse:.4f}  "
+                    f"post_rmse={ens_eval.post_rmse:.4f}  LSR={ens_eval.lsr:.3f}"
+                )
 
         # --- Step 4: Chow test ---
         chow_result = None

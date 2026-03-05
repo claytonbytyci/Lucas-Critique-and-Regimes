@@ -13,6 +13,7 @@ produced by :class:`simulation.dgp.MarkovSwitchingDGP`.
 from __future__ import annotations
 
 from .hmm import HMMRegimeModel
+from .linear_baselines import ARMAModel, ARModel, ModelAverageEnsemble
 from .markov_switching import MarkovSwitchingModel
 from .markov_switching_nn import MarkovSwitchingNeuralNetwork
 from .ml_regime import MLRegimeModel
@@ -26,4 +27,7 @@ __all__ = [
     "MLRegimeModel",
     "MixtureOfExpertsModel",
     "MarkovSwitchingNeuralNetwork",
+    "ARModel",
+    "ARMAModel",
+    "ModelAverageEnsemble",
 ]
