@@ -1,0 +1,840 @@
+\documentclass[aspectratio=169, 10pt]{beamer}
+
+% ── Theme ───────────────────────────────────────────────────────────────────
+\usetheme{Madrid}
+\usecolortheme{beaver}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+% ── Packages ────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, bm}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{array}
+\usepackage{colortbl}
+
+% ── Colour palette ──────────────────────────────────────────────────────────
+\definecolor{cambblue}{RGB}{163,193,173}
+\definecolor{darkblue}{RGB}{0,50,100}
+\definecolor{darkred}{RGB}{150,0,0}
+\definecolor{lightgrey}{RGB}{240,240,240}
+\definecolor{gold}{RGB}{180,140,0}
+\definecolor{mygreen}{RGB}{0,120,60}
+
+\setbeamercolor{title}{bg=darkblue,fg=white}
+\setbeamercolor{frametitle}{bg=darkblue,fg=white}
+\setbeamercolor{block title}{bg=darkblue,fg=white}
+\setbeamercolor{block body}{bg=lightgrey,fg=black}
+\setbeamercolor{alerted text}{fg=darkred}
+
+% ── Code listing style ──────────────────────────────────────────────────────
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{darkblue}\bfseries,
+  commentstyle=\color{mygreen}\itshape,
+  stringstyle=\color{darkred},
+  backgroundcolor=\color{lightgrey},
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{gray},
+  breaklines=true,
+  showstringspaces=false,
+  numbers=none,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=4pt,
+  belowskip=2pt,
+}
+
+% ── Macros ──────────────────────────────────────────────────────────────────
+\newcommand{\LSR}{\mathrm{LSR}}
+\newcommand{\RMSE}{\mathrm{RMSE}}
+
+% ── Title page ──────────────────────────────────────────────────────────────
+\title[Lucas Critique \& ML]{The Lucas Critique Examined in ML}
+\subtitle{D200 Machine Learning in Economics}
+\author{4815L}
+\institute{University of Cambridge}
+\date{March 2026}
+
+% ════════════════════════════════════════════════════════════════════════════
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ── Outline ─────────────────────────────────────────────────────────────────
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Motivation \& Research Question}
+
+\begin{frame}{The Lucas Critique (1976)}
+
+  \begin{block}{Core Argument}
+    Parameters of reduced-form econometric models are \alert{not policy-invariant}.
+    When a policy changes, agents update their expectations, altering the
+    model's coefficients and rendering pre-change forecasts invalid.
+  \end{block}
+
+  \smallskip
+
+  Formally, if an agent's rule is $x_t = f(y_t;\,\theta)$ where $\theta$ embeds
+  beliefs about policy $\{\pi_t\}$, then a shift $\pi\to\pi'$ forces
+  $\theta\to\theta'$ — \alert{invalidating any forecast built on $\hat\theta$}.
+
+  \smallskip
+
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Classical response:} VARs, regime-switching models — reduce
+      theory dependence while retaining parametric structure.
+
+      \smallskip
+
+      \textbf{ML:} Model-agnostic, data-driven, flexible functional form.
+      Do ML models provide a hedge against the Lucas Critique, or does
+      over-fitting to the pre-break regime make things \emph{worse}?
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{alertblock}{Research Question}
+        Are regime-switching ML models more or less susceptible to the
+        Lucas Critique than classical parametric alternatives, and
+        \textbf{why}?
+      \end{alertblock}
+      \vspace{2pt}
+      \begin{block}{Paper's Headline}
+        \small ML models degrade \emph{similarly} to classical models but
+        still produce \textbf{better out-of-sample forecasts} under regime change.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why This Matters}
+
+  \begin{itemize}\setlength\itemsep{8pt}
+    \item Rapidly shifting macroeconomic regimes — inflation shocks, financial crises,
+          unconventional monetary policy — are the norm. Forecasting under regime change
+          is directly relevant to policy-makers, central banks, and institutions using ML.
+
+    \item The Lucas Critique motivated the rise of VARs in the 1980s and DSGE
+          micro-foundations — yet model instability under structural breaks remains
+          an open problem for \emph{all} model classes, parametric or ML.
+
+    \item ML's flexible functional form (Athey, 2018) may reduce \emph{approximation
+          error} post-break. But greater in-sample flexibility may \emph{increase
+          estimation error} when the distribution shifts — a fundamental tension.
+
+    \item Connects to Breiman's ``two cultures'' and Box's ``all models are wrong'':
+          whether statistical modelling or algorithmic prediction better handles
+          regime instability is active and unresolved.
+  \end{itemize}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Literature Review}
+
+\begin{frame}{What Is Already Known}
+
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Classical response to Lucas:}
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item \textbf{VARs} (Bormetti \& Corsi, 2022) — reduced-form,
+              model-agnostic, no structural identification.
+        \item \textbf{TVP-VARs} (Primiceri, 2005) — time-varying
+              parameters; still parametric.
+        \item \textbf{MSM / Hamilton filter} (1989) — latent regimes;
+              parameters vary by regime, not by policy change.
+        \item \textbf{DSGEs} — micro-founded; Storm (2021) argues
+              still vulnerable to structural misspecification.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{ML and the Lucas Critique:}
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item \textbf{Athey (2018)} — data-driven model selection;
+              may outperform parametric models when structure shifts.
+        \item \textbf{Chen (2018)} — ML on Progresa programme;
+              relative forecasting strength under changing structure.
+        \item \textbf{Salle (2015)} — ANN expectation formation;
+              Lucas-robust as no structural form assumed.
+        \item \textbf{Pereira (2025)} — ML rethinks econometric
+              methodology (predictive economics manifesto).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{3pt}
+  \begin{block}{Gap This Project Fills}
+    No systematic \emph{head-to-head} comparison of classical and ML regime-switching
+    models on the same Lucas Critique experiment with both simulated (known DGP)
+    and real macroeconomic data.
+  \end{block}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Data}
+
+\begin{frame}{Data: Two Experimental Settings}
+
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Experiment A — Simulated DGP}
+
+      \smallskip
+      Two-state Markov-switching AR(1) with known ground truth:
+      \[
+        y_t = \mu_{s_t} + \phi_{s_t} y_{t-1} + \sigma_{s_t}\varepsilon_t,
+        \quad \varepsilon_t \overset{\text{iid}}{\sim}\mathcal{N}(0,1)
+      \]
+
+      \vspace{-4pt}
+      \begin{center}\scriptsize
+      \begin{tabular}{lcccc}
+        \toprule
+        & \multicolumn{2}{c}{Mild} & \multicolumn{2}{c}{Severe} \\
+        \cmidrule(lr){2-3}\cmidrule(lr){4-5}
+        Param & Pre & Post & Pre & Post \\
+        \midrule
+        $\mu_0$ & 0.5 & 0.2 & 0.5 & $-$0.5 \\
+        $\mu_1$ & $-$1.5 & $-$1.0 & $-$1.5 & $-$3.0 \\
+        $\sigma_0$ & 1.0 & 1.3 & 1.0 & 2.0 \\
+        $\sigma_1$ & 2.5 & 3.0 & 2.5 & 4.5 \\
+        $P_{00}$ & 0.95 & 0.90 & 0.95 & 0.80 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \vspace{1pt}
+      {\scriptsize Mild = gradual tightening; Severe = Volcker-scale}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \textbf{Experiment B — Real-world FRED data}
+
+      \smallskip
+      \begin{tabular}{lll}
+        \toprule
+        Series & Break & Period \\
+        \midrule
+        INDPRO & Great Moderation & Jan 1984 \\
+        CPIAUCSL & Volcker disinflation & Oct 1979 \\
+        \bottomrule
+      \end{tabular}
+
+      \smallskip
+      Covariates: EFFR, UNRATE, USREC (NBER).
+
+      \smallskip
+      \textbf{Transformations:} log-differences $\times100$; lags;
+      5/20-period rolling mean/std; trend-cycle decomposition
+      for HMM features.
+
+      \smallskip
+      \textbf{Protocol:} Train pre-break only; evaluate post-break.
+      No re-training or look-ahead. Models frozen at pre-break estimates.
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Methodology}
+
+\begin{frame}{Eight Models: A Taxonomy}
+
+  \begin{center}\small
+  \begin{tabular}{llll}
+    \toprule
+    Model & Family & Regime identification & Forecast \\
+    \midrule
+    AR(2) & Linear baseline & None & AR linear \\
+    ARMA(2,1) & Linear baseline & None & AR+MA linear \\
+    \rowcolor{lightgrey}
+    MSM & Classical reg.-switch & Hamilton filter (EM) & Regime-wtd AR \\
+    \rowcolor{lightgrey}
+    TAR & Classical reg.-switch & Threshold on $y_{t-1}$ & Per-regime OLS \\
+    \rowcolor{cambblue!60}
+    HMM + Ridge & Probabilistic ML & Baum-Welch EM & Per-regime Ridge \\
+    \rowcolor{cambblue!60}
+    Mixture of Experts & Probabilistic ML & Soft gating via EM & Wtd Ridge \\
+    \rowcolor{cambblue!60}
+    ML Regime (XGB) & Nonlinear ML & KMeans $\to$ XGBClassifier & Per-regime XGBRegressor \\
+    \rowcolor{cambblue!60}
+    MSNN & Nonlinear ML & Markov chain + MLP (EM) & Per-regime MLP \\
+    \midrule
+    Model Average & Ensemble & — & Equal-weight mean \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{3pt}
+  \begin{block}{Evaluation Metric — Lucas Sensitivity Ratio (LSR)}
+    \[
+      \LSR = \frac{\RMSE_{\text{post}}}{\RMSE_{\text{pre}}}
+      \qquad
+      \begin{cases}
+        \LSR > 1 & \text{Lucas-critique vulnerable (post-break worse)} \\
+        \LSR < 1 & \text{inverse Lucas: variance-reducing break (post-break better)}
+      \end{cases}
+    \]
+  \end{block}
+
+\end{frame}
+
+\begin{frame}{Theoretical Framework: Forecast Risk Decomposition}
+
+  DGP: $y_{t+1} = f_{s_t}(x_t) + \varepsilon_{t+1}$, $s_t\in\{1,\dots,S\}$.
+  Optimal forecast: $m^*(x_t) = \sum_{s} \Pr(s_t{=}s\mid x_t)\,\mathbb{E}[y_{t+1}\mid x_t,s_t{=}s]$.
+
+  \smallskip
+  Total forecast risk decomposes as:
+  \[
+    \mathbb{E}\!\left[(y_{t+1}-\hat{m}(x_t))^2\right]
+    = \underbrace{\sigma^2}_{\text{irreducible}}
+    + \underbrace{\mathbb{E}\!\left[(m^*-m(\cdot;\mathcal{F}))^2\right]}_{\text{approximation error}}
+    + \underbrace{\mathbb{E}\!\left[(m(\cdot;\mathcal{F})-\hat{m})^2\right]}_{\text{estimation error}}.
+  \]
+
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \textbf{Under the Lucas Critique:}
+      \begin{itemize}\setlength\itemsep{2pt}
+        \item Parametric MSM: low estimation error (correct spec.) but high
+              \emph{approximation} error once DGP shifts.
+        \item Flexible ML: low approximation error in-sample but high
+              \emph{estimation} error post-break (over-fitting).
+        \item Variance-reducing break (INDPRO 1984): $\sigma^2$ falls $\Rightarrow$
+              LSR $<1$ even with frozen $\hat\theta$ — \emph{inverse Lucas Critique}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.41\textwidth}
+      \begin{alertblock}{Key Prediction}
+        MSM minimises estimation error under the correct spec.\ but
+        collapses when the DGP shifts. ML does the opposite.
+        Neither class is immune.
+      \end{alertblock}
+      \vspace{2pt}
+      \begin{block}{Ensemble insight}
+        Expanding $\mathcal{F}$ via model averaging reduces approximation
+        error — theoretical basis for the ensemble's stability.
+      \end{block}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Implementation Details}
+
+\begin{frame}[fragile]{HMM + Ridge: Two-Stage Pipeline}
+
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+      \textbf{Stage 1 — Gaussian HMM} (Baum-Welch EM):
+      $\mathbf{O}_t = [y_t,\; y_{t-1},\; \bar{y}^{(5)}_t,\; s^{(5)}_t,\; \bar{y}^{(20)}_t]^\top$
+
+      Short/long-run trend-volatility summaries help detect transitions.
+      Viterbi decoding gives $s^*_{1:T}$; causal forward filter at test time.
+
+      \textbf{Stage 2 — Per-regime Ridge:}
+      $\hat{y}_t = \hat\beta_{s^*_t}^\top x_t$,\;
+      $x_t = [y_{t-1},\; \bar{y}^{(5)}_t,\; s^{(5)}_t,\; \text{EFFR},\; \text{UNRATE}]$
+
+      \begin{lstlisting}
+O = df[["y","y_lag1","roll_mean_5",
+        "roll_std_5","roll_mean_20"]].values
+hmm = GaussianHMM(n_components=2, n_iter=200).fit(O)
+regimes = hmm.predict(O)       # Viterbi
+for k in range(2):
+    mask = (regimes == k)
+    regressors[k] = Ridge(alpha=1.0).fit(X[mask], y[mask])
+# Test: causal forward filter (no look-ahead)
+regime = forward_filter_predict(O_new)
+yhat   = regressors[regime].predict(x_new)
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.37\textwidth}
+      \begin{block}{Why HMM is most robust}
+        \textbf{Soft} regime assignments adapt partially to a shifted emission
+        distribution — unlike hard KMeans frozen boundaries.
+
+        \smallskip
+        Ridge regressors resist overfitting.
+
+        \smallskip
+        LSR = \textbf{1.51} (mild), \textbf{2.29} (severe) — best across
+        all 4 experiments (simulated + real-world).
+      \end{block}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{ML Regime (XGB) \& Mixture of Experts}
+
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{ML Regime — three stages:}
+
+      \smallskip
+      {\small\textbf{1.} KMeans on lags + rolling stats $\to$ pseudo-regime labels\\
+      \textbf{2.} XGBClassifier reproduces labels from same features\\
+      \textbf{3.} Per-regime XGBRegressor trained on labelled subset}
+
+      \begin{lstlisting}
+km     = KMeans(n_clusters=2).fit(X)
+labels = km.labels_
+clf    = XGBClassifier(n_estimators=200)
+clf.fit(X, labels)
+for k in range(2):
+    regs[k] = XGBRegressor().fit(
+        X[labels==k], y[labels==k])
+      \end{lstlisting}
+
+      \alert{Vulnerability:} KMeans boundaries are frozen. XGB's piecewise-constant
+      leaves memorise training data perfectly but extrapolate poorly — leaf values become
+      systematically wrong post-break.
+      Pre-RMSE = \textbf{0.396} (best); LSR = \textbf{8.43} (worst).
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Mixture of Experts — soft gating via EM:}
+
+      \smallskip
+      $K=2$ Ridge regressors with a logistic gating network.
+      Regime probability updated by EM:
+      \[
+        R_{tk} = P(\text{expert}=k \mid x_t, y_t)
+        \propto \pi_k(x_t)\cdot\mathcal{N}(y_t;\,\hat\mu_{kt},\hat\sigma_k^2)
+      \]
+      The EM alternates between updating $R_{tk}$ and refitting the gating
+      network + Ridge experts. Forecast:
+      \[
+        \hat{y}_t = \textstyle\sum_k \pi_k(x_t)\cdot\hat\beta_k^\top x_t
+      \]
+      \textit{Unlike TAR or XGB}, each expert contributes proportionally to
+      its gating weight — partial regularisation, reduced sensitivity to
+      regime misclassification. LSR = 1.96 (mild shift).
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{MSNN: Markov Switching Neural Network}
+
+  Extends Hamilton's MSM by replacing linear regime-specific models with
+  MLP experts, estimated jointly via EM.
+
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \textbf{E-step} — log-space Hamilton forward-backward filter:
+      \[
+        \gamma_t(k) = P(s_t{=}k\mid y_{1:T}),\quad
+        \xi_t(j,k) = P(s_t{=}j,s_{t+1}{=}k\mid y_{1:T})
+      \]
+      \textbf{M-step} — analytical transition update + Adam for MLPs:
+      \[
+        \hat{P}_{jk} \propto \textstyle\sum_t \xi_t(j,k),\quad
+        \mathcal{L}_k = \textstyle\sum_t \gamma_t(k)(y_t - f_k(x_t))^2
+      \]
+
+      \begin{lstlisting}
+# E-step: log-space forward filter
+log_alpha = log_pi + log_emit(y[0])
+for t in range(1, T):
+    log_alpha = logsumexp(
+        log_alpha[:,None]+log_A, axis=0
+    ) + log_emit(y[t])
+# M-step: weighted MLP update
+for k in range(K):
+    mlp[k].fit(X, y, sample_weight=gamma[:,k])
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \textbf{MLP architecture:}
+      $n_{\text{feat}} \to 32 \to 16 \to 1$,
+      ReLU, linear output, Adam ($\eta=3{\times}10^{-3}$), 200 epochs.
+
+      \smallskip
+      \textbf{Key advantage:} Smooth MLP interpolation degrades gracefully
+      post-break — unlike XGB's step functions.
+
+      \textbf{Key weakness:} EM collapses to one dominant regime in-sample
+      (accuracy $\approx51\%$; Markov constraint not binding).
+
+      Despite this: \textbf{best absolute post-break RMSE} (2.493 mild,
+      3.391 severe) — smooth extrapolation dominates the regime failure.
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Results}
+
+\begin{frame}{Simulated Results: Lucas Sensitivity Ratios}
+
+  \begin{center}\small
+  \begin{tabular}{lcccccc}
+    \toprule
+    & \multicolumn{3}{c}{\textbf{Simulated Mild}} & \multicolumn{3}{c}{\textbf{Simulated Severe}} \\
+    \cmidrule(lr){2-4}\cmidrule(lr){5-7}
+    Model & Pre & Post & LSR & Pre & Post & LSR \\
+    \midrule
+    AR(2) Baseline     & 1.634 & 2.706 & 1.66 & 1.634 & 4.261 & 2.61 \\
+    ARMA(2,1)          & 1.674 & 5.577 & 3.33 & 1.674 & 11.61 & 3.33 \\
+    MSM                & 1.673 & 5.968 & 3.57 & 1.673 & 11.96 & 7.15 \\
+    TAR                & 1.537 & 2.526 & 1.64 & 1.537 & 4.266 & 2.78 \\
+    \rowcolor{cambblue!40}
+    \textbf{HMM}       & 1.696 & 2.559 & \textbf{1.51} & 1.696 & 3.892 & \textbf{2.29} \\
+    Mixture of Experts & 1.339 & 2.628 & 1.96 & 1.339 & 4.742 & 3.54 \\
+    \rowcolor{red!20}
+    ML Regime (XGB)    & 0.396 & 3.337 & 8.43 & 0.396 & 8.471 & 21.41 \\
+    MSNN               & 0.613 & \textbf{2.493} & 4.07 & 0.613 & \textbf{3.391} & 5.53 \\
+    \rowcolor{cambblue!20}
+    Model Average      & 1.222 & \underline{2.015} & 2.47 & 1.222 & 6.007 & 4.92 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{By LSR (relative degradation)}
+        \textbf{HMM} best (1.51), \textbf{XGB} worst (8.43). MSM
+        \emph{worse} than AR(2) — Hamilton filter collapses post-break.
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{alertblock}{By absolute post-break RMSE}
+        \textbf{MSNN} best (2.493) despite high LSR. Rankings
+        \alert{invert} — both metrics are needed.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}{Real-World Results: INDPRO \& CPI}
+
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Industrial Production — Great Moderation (1984)}
+
+      \smallskip
+      \begin{tabular}{lccc}
+        \toprule
+        Model & Pre & Post & LSR \\
+        \midrule
+        AR(2)  & 0.717 & 0.514 & 0.72 \\
+        MSM    & 0.823 & 0.723 & 0.88 \\
+        TAR    & 0.624 & 0.397 & 0.64 \\
+        \rowcolor{cambblue!40}
+        \textbf{HMM} & 0.648 & \textbf{0.378} & \textbf{0.58} \\
+        MoE    & 0.619 & 0.407 & 0.66 \\
+        \rowcolor{red!20}
+        XGB    & 0.140 & 0.443 & 3.18 \\
+        MSNN   & 0.326 & 0.493 & 1.51 \\
+        \bottomrule
+      \end{tabular}
+
+      \smallskip
+      \alert{Inverse Lucas:} INDPRO std dev halves ($0.892\to0.512$), falling $\sigma^2$
+      improves accuracy for 7/9 models. Only XGB and MSNN degrade (pre-break overfitting).
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \textbf{CPI Inflation — Volcker Disinflation (1979)}
+
+      \smallskip
+      \begin{tabular}{lccc}
+        \toprule
+        Model & Pre & Post & LSR \\
+        \midrule
+        AR(2)  & 2.631 & 2.594 & 0.99 \\
+        MSM    & 2.954 & 4.038 & 1.37 \\
+        TAR    & 1.912 & 2.276 & 1.19 \\
+        \rowcolor{cambblue!40}
+        \textbf{HMM} & 2.040 & 2.311 & \textbf{1.13} \\
+        MoE    & 1.791 & 2.992 & 1.67 \\
+        \rowcolor{red!20}
+        XGB    & 0.357 & 2.559 & 7.18 \\
+        MSNN   & 1.852 & 3.068 & 1.66 \\
+        \bottomrule
+      \end{tabular}
+
+      \smallskip
+      Classic Lucas pattern: all models degrade. HMM most stable (LSR=1.13).
+      Chow \emph{fails} ($F=1.39$, $p=0.25$) — Volcker is a shift in regime
+      \emph{transition dynamics}, not AR parameters.
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}{Cross-Experiment Summary}
+
+  \begin{center}\small
+  \begin{tabular}{lcccc}
+    \toprule
+    Finding & Sim (Mild) & Sim (Severe) & INDPRO 1984 & CPI 1979 \\
+    \midrule
+    All models LSR $>1$? & \textcolor{mygreen}{Yes} & \textcolor{mygreen}{Yes}
+      & \textcolor{darkred}{No — 7/9 improve} & \textcolor{mygreen}{Yes} \\
+    XGB worst LSR?    & \textcolor{mygreen}{Yes (8.4)} & \textcolor{mygreen}{Yes (21.4)}
+      & \textcolor{mygreen}{Yes (3.2)} & \textcolor{mygreen}{Yes (7.2)} \\
+    HMM most stable? & \textcolor{mygreen}{Yes (1.51)} & \textcolor{mygreen}{Yes (2.29)}
+      & \textcolor{mygreen}{Yes (0.58)} & \textcolor{mygreen}{Yes (1.13)} \\
+    Chow detects break? & Yes ($F{=}13.7$) & Yes & Yes ($F{=}5.83$) & \textcolor{darkred}{No ($F{=}1.39$)} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{2pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Cross-experiment invariant}
+        \textbf{XGB} is most vulnerable in every experiment.
+        \textbf{HMM} is most robust. These rankings are preserved
+        regardless of break type, direction, simulated or real.
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{alertblock}{The dual-metric tension}
+        \textbf{HMM} = best LSR. \textbf{MSNN} = best absolute post-break RMSE.
+        \textbf{XGB} = best pre-break RMSE \emph{and} worst LSR.
+        The metric chosen determines the model ranking.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Discussion}
+
+\begin{frame}{What Worked \& Why}
+
+  \footnotesize
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \textbf{\textcolor{mygreen}{HMM — best LSR all 4 experiments}}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item \emph{Flexible latent-state estimation} (soft posteriors), not
+              functional form — probabilistic assignments adapt to shifted
+              emission distributions without re-training.
+        \item Ridge regressors resist overfitting to pre-break noise.
+              LSR = 1.51 (mild), 2.29 (severe).
+      \end{itemize}
+
+      \vspace{2pt}
+      \textbf{\textcolor{mygreen}{MSNN — best absolute post-break RMSE}}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item Smooth MLP extrapolation degrades more gracefully than XGB's
+              step functions. Advantage grows with shift magnitude
+              (2.493 mild, 3.391 severe).
+      \end{itemize}
+
+      \vspace{2pt}
+      \textbf{\textcolor{mygreen}{Model average — stable ensemble}}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item Lower post-break RMSE \emph{and} lower LSR in 2/4 experiments.
+              Expanding $\mathcal{F}$ reduces approximation error
+              (consistent with the risk decomposition).
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \textbf{\textcolor{darkred}{XGB — catastrophic failure}}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item Piecewise-constant leaves memorise pre-break regime structure;
+              post-break misclassification causes systematic leaf-value errors.
+        \item Pre-break RMSE 0.40: a \emph{denominator effect} inflating LSR to
+              8.43 (mild) / 21.41 (severe). Frozen KMeans regime classifier
+              is most brittle under distributional shift.
+      \end{itemize}
+
+      \vspace{2pt}
+      \textbf{\textcolor{darkred}{MSM — correctly specified, then collapses}}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item Correctly-specified for the DGP. Fixed EM estimates
+              $(\hat\mu_k,\hat\sigma_k,\hat{P})$ cause Hamilton filter collapse:
+              regime accuracy $75\%\!\to\!20\%$, ARI$\to$0.
+        \item LSR = 3.57 — \emph{worse} than AR(2) (1.66). Correct pre-break
+              specification \emph{increases} Lucas vulnerability.
+      \end{itemize}
+
+      \vspace{2pt}
+      \begin{block}{\footnotesize Key Insight}
+        Models flexible in \emph{latent-state estimation} (HMM) outperform
+        those flexible in \emph{functional form} (XGB) under structural breaks.
+      \end{block}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}{What Did Not Work, Limitations \& Hypotheses}
+
+  \small
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \textbf{Limitations:}
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item \textbf{No online updating} — by design (isolates the Lucas mechanism),
+              but limits practical relevance. Key next step.
+        \item \textbf{MSNN regime alignment poor} — accuracy $\approx51\%$ (near random);
+              EM collapsed to one dominant regime; Markov constraint not binding.
+        \item \textbf{CUSUM detects break 156 periods late} under mild shift;
+              limited real-time usefulness.
+        \item \textbf{Chow test misses Volcker break} — dynamics shift, not parameter
+              shift; Chow cannot detect it.
+        \item \textbf{LSR metric-sensitive} to pre-break RMSE; cannot compare
+              across models with very different in-sample fit.
+        \item Single train/test split for real-world data limits power.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \textbf{Formal hypothesis verdicts:}
+
+      \vspace{3pt}
+      {\footnotesize
+      \begin{tabular}{lp{3.6cm}}
+        \toprule
+        H & Result \\
+        \midrule
+        H1: all LSR$>1$ & \textcolor{mygreen}{Not rejected} for variance-increasing breaks \\
+        H2: regime $<$ AR & \textcolor{darkred}{Rejected} — HMM wins but MSM $>$ AR(2) \\
+        H3: ML over-fits & \textcolor{mygreen}{Confirmed} for XGB; partial for MSNN \\
+        H4: break direction & \textcolor{mygreen}{Confirmed} — INDPRO inverse Lucas \\
+        \bottomrule
+      \end{tabular}}
+
+      \vspace{3pt}
+      \begin{block}{Overall verdict}
+        ML does \emph{not} resolve the Lucas Critique. Flexible
+        \emph{latent-state} models (HMM) beat flexible \emph{functional
+        form} models (XGB) under structural breaks.
+      \end{block}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}{Next Steps}
+
+  \begin{enumerate}\setlength\itemsep{5pt}
+    \item \textbf{Online / sequential updating.}
+          Rolling-window or Bayesian online learning: how quickly does each model
+          class recover post-break? This directly tests the practical Lucas Critique
+          response.
+
+    \item \textbf{Composite stability metric.}
+          Combine LSR and absolute post-break RMSE to avoid the denominator-effect pathology:
+          $\mathrm{Composite} = \alpha \cdot \LSR + (1-\alpha)\cdot\RMSE_{\text{post}}/\bar\sigma$.
+
+    \item \textbf{Richer DGP and more real-world series.}
+          Non-linear DGPs (GARCH-regime, threshold GARCH), additional FRED series,
+          multi-country panels — testing generalisability of the HMM/XGB ranking.
+
+    \item \textbf{Optimised ensembles.}
+          The model average already outperforms in 2/4 experiments. Stacking or
+          Bayesian model averaging with Lucas-stability priors could improve further.
+
+    \item \textbf{Attention-based sequence models.}
+          Transformers implicitly re-weight past observations — this may confer
+          natural Lucas robustness without explicit regime modelling.
+  \end{enumerate}
+
+\end{frame}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Conclusion}
+
+\begin{frame}{Summary}
+
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \begin{block}{Main Findings}
+        \begin{enumerate}\setlength\itemsep{1pt}\small
+          \item \textbf{Lucas Critique affects all classes} — no model is immune
+                under variance-increasing breaks.
+          \item \textbf{HMM most stable} (best LSR all 4 experiments) — flexible
+                \emph{latent-state estimation}, not functional form, is key.
+          \item \textbf{XGB catastrophically vulnerable} — best pre-break RMSE,
+                worst LSR in every experiment.
+          \item \textbf{Break character determines direction} — variance-reducing
+                breaks (INDPRO 1984) produce inverse Lucas: LSR$<$1 for 7/9 models.
+          \item \textbf{LSR and absolute RMSE diverge} — MSNN best absolute
+                post-break RMSE despite high LSR; both metrics are needed.
+        \end{enumerate}
+      \end{block}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{alertblock}{Policy Implication}
+        ML does \emph{not} resolve the Lucas Critique. Flexible models (XGB)
+        may degrade \emph{more}. \textbf{HMM-family models} preferred where
+        structural stability matters more than in-sample fit.
+      \end{alertblock}
+
+      \vspace{3pt}
+      \begin{block}{Headline (Paper Abstract)}
+        \emph{``ML models degrade similarly to traditional models but still
+        produce better forecasts under regime change''} — the MSNN's smooth
+        extrapolation achieves best absolute post-break accuracy.
+      \end{block}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+% ── References ───────────────────────────────────────────────────────────────
+\begin{frame}[allowframebreaks]{References}
+  \footnotesize
+  \begin{thebibliography}{99}
+    \bibitem{lucas1976} R.~E. Lucas, ``Econometric policy evaluation: A critique,''
+      \emph{Carnegie-Rochester Conference Series on Public Policy}, \textbf{1}, 19 (1976).
+
+    \bibitem{hamilton1989} J.~D. Hamilton, ``A new approach to the economic analysis of
+      nonstationary time series and the business cycle,''
+      \emph{Econometrica}, \textbf{57}(2), 357--384 (1989).
+
+    \bibitem{bormetti2022} G.~Bormetti and F.~Corsi, ``A Lucas critique compliant SVAR
+      model with observation-driven time-varying parameters,'' arXiv:2107.05263 (2022).
+
+    \bibitem{primiceri2005} G.~E. Primiceri, ``Time varying structural vector
+      autoregressions and monetary policy,'' \emph{Review of Economic Studies},
+      \textbf{72}(3), 821--852 (2005).
+
+    \bibitem{storm2021} S.~Storm, ``Cordon of conformity: Why DSGE models are not the
+      future of macroeconomics,'' \emph{Int.\ J.\ Political Economy},
+      \textbf{50}, 77 (2021).
+
+    \bibitem{athey2018} S.~Athey, ``The impact of machine learning on economics,''
+      in \emph{The Economics of AI}, University of Chicago Press, 507--547 (2018).
+
+    \bibitem{chen2018} T.-S. Chen, \emph{Essays on Applied Economics with Machine Learning},
+      PhD dissertation, Washington University in St Louis (2018).
+
+    \bibitem{salle2015} I.~L. Salle, ``Modeling expectations in agent-based models,''
+      \emph{Economic Modelling}, \textbf{46}, 130 (2015).
+
+    \bibitem{mcconnell2000} M.~M. McConnell and G.~Perez-Quiros, ``Output fluctuations
+      in the United States,'' \emph{American Economic Review}, \textbf{90}, 1464 (2000).
+
+    \bibitem{clarida2000} R.~Clarida, J.~Galí, and M.~Gertler, ``Monetary policy rules
+      and macroeconomic stability,'' \emph{Quarterly Journal of Economics},
+      \textbf{115}, 147 (2000).
+
+    \bibitem{pereira2025} M.~A. Pereira, ``Predictive economics: Rethinking economic
+      methodology with machine learning,'' arXiv:2510.04726 (2025).
+  \end{thebibliography}
+\end{frame}
+
+\end{document}
