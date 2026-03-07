@@ -2,7 +2,7 @@
 
 The Lucas Critique (1976) holds that once agents perceive a policy change,
 the behavioural parameters of any model estimated on pre-change data are
-invalidated.  We operationalise this by:
+invalidated.  I operationalise this by:
 
     1. Estimating a regime model on data from a *pre-break* DGP.
     2. Replacing the DGP with a *post-break* DGP that has shifted parameters.
@@ -20,13 +20,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from .dgp import MarkovSwitchingDGP, RegimeParams
+from .dgp import MarkovSwitchingDGP, RegimeParams # importing the dgp and regime parameters for the simulation of the data with shifts
 
-
-# ---------------------------------------------------------------------------
 # Lucas shift specification
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class LucasShift:
@@ -53,7 +49,7 @@ class LucasShift:
     delta_sigma: dict[int, float] = None        # new absolute sigma per regime
     delta_transition: np.ndarray | None = None  # entire new transition matrix
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None: # this is to ensure that if any of the dicts are left unfilled, they just return an empty set
         if self.delta_mu is None:
             self.delta_mu = {}
         if self.delta_phi is None:
@@ -62,7 +58,7 @@ class LucasShift:
             self.delta_sigma = {}
 
 
-# Canonical "mild" Lucas shift: recession deepens, recovery weakens
+# Canonical "mild" Lucas shift: recession deepens, recovery weakens so regimes are more distinct (can play around with the parameters here)
 MILD_SHIFT = LucasShift(
     delta_mu={0: -1.2, 1: 0.4},    # recession deeper, expansion weaker
     delta_phi={0: 0.80},            # recession becomes more persistent
@@ -84,28 +80,22 @@ SEVERE_SHIFT = LucasShift(
     ),
 )
 
-
-# ---------------------------------------------------------------------------
 # Core functions
-# ---------------------------------------------------------------------------
-
 
 def apply_lucas_shift(dgp: MarkovSwitchingDGP, shift: LucasShift) -> MarkovSwitchingDGP:
     """Return a new DGP with shifted parameters, leaving the original unchanged.
 
-    Parameters
-    ----------
+    Parameters:
     dgp : MarkovSwitchingDGP
         The original (pre-break) DGP.
     shift : LucasShift
         Parameter changes to apply.
 
-    Returns
-    -------
+    Returns:
     MarkovSwitchingDGP
         A new DGP instance with updated parameters.
     """
-    new_regimes: list[RegimeParams] = []
+    new_regimes: list[RegimeParams] = [] # creating the new regimes with shifing parameters
     for i, r in enumerate(dgp.regimes):
         new_regimes.append(
             RegimeParams(

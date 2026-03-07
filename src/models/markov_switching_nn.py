@@ -8,11 +8,6 @@ Markov chain.  Parameters are estimated jointly via EM:
   M-step  — Transition matrix and initial distribution updated analytically;
              MLP experts updated via Adam gradient descent weighted by the
              smoothed regime posteriors gamma_t(k) = P(s_t=k | y_{1:T}).
-
-References
-----------
-Hamilton, J. D. (1989). A new approach to the economic analysis of
-    nonstationary time series and the business cycle. Econometrica, 57(2).
 """
 
 from __future__ import annotations
@@ -25,10 +20,7 @@ __all__ = ["MarkovSwitchingNeuralNetwork"]
 
 _FEATURE_COLS = ["y_lag1", "y_lag2", "roll_mean_5", "roll_std_5", "exog_0", "exog_1"]
 
-
-# ---------------------------------------------------------------------------
 # Tiny MLP — numpy-only, Adam optimiser, supports per-sample weights
-# ---------------------------------------------------------------------------
 
 class _MLP:
     """Small feedforward MLP (ReLU activations, linear output, Adam optimiser).
@@ -48,7 +40,7 @@ class _MLP:
     ) -> None:
         rng = np.random.default_rng(random_state)
         dims = [n_in, *hidden, 1]
-        # He / Xavier initialisation (scale by sqrt(2/fan_in) for ReLU layers)
+        # He / Xavier initialisation (scale by sqrt(2/fan_in) for ReLU layers) which is standard for MLPs and aids convergence
         self.W = [
             rng.normal(0.0, np.sqrt(2.0 / dims[i]), (dims[i + 1], dims[i]))
             for i in range(len(dims) - 1)
@@ -58,7 +50,6 @@ class _MLP:
         self.n_epochs = n_epochs
         self.l2 = l2
 
-    # ------------------------------------------------------------------
     def _forward(self, X: np.ndarray) -> list:
         h = X
         acts = [h]
@@ -68,7 +59,6 @@ class _MLP:
             acts.append(h)
         return acts
 
-    # ------------------------------------------------------------------
     def fit(
         self,
         X: np.ndarray,
@@ -121,14 +111,10 @@ class _MLP:
 
         return self
 
-    # ------------------------------------------------------------------
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self._forward(X)[-1].flatten()
 
-
-# ---------------------------------------------------------------------------
 # Markov Switching Neural Network
-# ---------------------------------------------------------------------------
 
 class MarkovSwitchingNeuralNetwork:
     """Markov Switching Neural Network (MSNN).
@@ -189,9 +175,7 @@ class MarkovSwitchingNeuralNetwork:
         self._pi0: np.ndarray = np.full(k_regimes, 1.0 / k_regimes)
         self._scaler: StandardScaler = StandardScaler()
 
-    # ------------------------------------------------------------------
     # Feature helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _get_features(df: pd.DataFrame) -> np.ndarray:
@@ -224,9 +208,7 @@ class MarkovSwitchingNeuralNetwork:
             )
         return log_p
 
-    # ------------------------------------------------------------------
     # E-step: Hamilton filter + backward smoother (log-space)
-    # ------------------------------------------------------------------
 
     def _forward_backward(
         self, log_obs: np.ndarray
@@ -246,7 +228,7 @@ class MarkovSwitchingNeuralNetwork:
         T, K = log_obs.shape
         log_A = np.log(self._A + 1e-300)
 
-        # --- Forward pass ---
+        # Forward pass
         log_alpha = np.empty((T, K))
         log_alpha[0] = np.log(self._pi0 + 1e-300) + log_obs[0]
         for t in range(1, T):
@@ -260,7 +242,7 @@ class MarkovSwitchingNeuralNetwork:
 
         ll = float(np.logaddexp.reduce(log_alpha[-1]))
 
-        # --- Backward pass ---
+        # Backward pass 
         log_beta = np.zeros((T, K))
         for t in range(T - 2, -1, -1):
             # log_A shape (K,K); log_obs[t+1] shape (K,) bcast over rows
@@ -270,12 +252,12 @@ class MarkovSwitchingNeuralNetwork:
                 log_A + log_obs[t + 1] + log_beta[t + 1], axis=1
             )
 
-        # --- Smoothed posteriors ---
+        # Smoothed posteriors
         log_gamma = log_alpha + log_beta
         log_gamma -= np.logaddexp.reduce(log_gamma, axis=1, keepdims=True)
         gamma = np.exp(np.clip(log_gamma, -500.0, 0.0))
 
-        # --- Joint smoothed (xi) for transition update ---
+        # Joint smoothed (xi) for transition update
         xi = np.empty((T - 1, K, K))
         for t in range(T - 1):
             # log_alpha[t,:,None] (K,1) + log_A (K,K) + log_obs[t+1] (K,) + log_beta[t+1] (K,)
@@ -290,10 +272,8 @@ class MarkovSwitchingNeuralNetwork:
 
         return gamma, xi, ll
 
-    # ------------------------------------------------------------------
     # M-step helpers
-    # ------------------------------------------------------------------
-
+  
     def _update_transition(self, gamma: np.ndarray, xi: np.ndarray) -> None:
         num = xi.sum(axis=0)                          # (K, K)
         denom = gamma[:-1].sum(axis=0)[:, None]       # (K, 1)
@@ -301,10 +281,8 @@ class MarkovSwitchingNeuralNetwork:
         row_sums = self._A.sum(axis=1, keepdims=True)
         self._A /= np.where(row_sums > 0, row_sums, 1.0)
 
-    # ------------------------------------------------------------------
     # Public interface
-    # ------------------------------------------------------------------
-
+    
     def fit(self, df: pd.DataFrame) -> "MarkovSwitchingNeuralNetwork":
         rng = np.random.default_rng(self.random_state)
         K = self.k_regimes
@@ -327,7 +305,7 @@ class MarkovSwitchingNeuralNetwork:
             for _ in range(K)
         ]
 
-        # Diagonal-dominant transition matrix (regimes tend to persist)
+        # Diagonal-dominant transition matrix (regimes tend to persist) which means the EM algorithm starts with a regime structure more likely to capture consistent patterns/regimes
         stay = 0.9
         off = (1.0 - stay) / max(K - 1, 1)
         self._A = np.full((K, K), off)
@@ -336,14 +314,14 @@ class MarkovSwitchingNeuralNetwork:
         self._pi0 = np.full(K, 1.0 / K)
         self._sigmas = np.ones(K)
 
-        # Bootstrap: pre-train each expert on a disjoint random slice
+        # Bootstrap: pre-train each expert on a disjoint random slice of data to break symmetry and give EM algorithm a better starting point
         for k in range(K):
             idx = rng.choice(T, size=max(T // K, 20), replace=False)
             self._experts[k].fit(X[idx], y[idx])
             preds_k = self._experts[k].predict(X)
             self._sigmas[k] = float(np.std(y - preds_k)) + 1e-4
 
-        # EM loop
+        # EM loop which alternates between the E-step forward backward for computing smoothed posteriors and the M-step for updating the transition matrix
         prev_ll = -np.inf
         for _ in range(self.n_iter):
             # Expert predictions — (T, K)
@@ -376,8 +354,6 @@ class MarkovSwitchingNeuralNetwork:
 
         return self
 
-    # ------------------------------------------------------------------
-
     def _viterbi(self, log_obs: np.ndarray) -> np.ndarray:
         """Viterbi decoding — most-likely regime sequence."""
         T, K = log_obs.shape
@@ -396,8 +372,6 @@ class MarkovSwitchingNeuralNetwork:
             states[t] = psi[t + 1, states[t + 1]]
         return states
 
-    # ------------------------------------------------------------------
-
     def _compute_log_obs(
         self, df: pd.DataFrame
     ) -> tuple:
@@ -408,8 +382,6 @@ class MarkovSwitchingNeuralNetwork:
         mu = np.column_stack([e.predict(X) for e in self._experts])
         return self._log_obs_prob(y, mu, self._sigmas), X
 
-    # ------------------------------------------------------------------
-
     def predict(self, df: pd.DataFrame) -> np.ndarray:
         """One-step-ahead predictions using a causal Hamilton forward filter.
 
@@ -419,7 +391,7 @@ class MarkovSwitchingNeuralNetwork:
         soft-mixture over expert outputs weighted by these causal
         probabilities.
 
-        (``predict_regimes`` still uses Viterbi over the full sequence
+        (predict_regimes still uses Viterbi over the full sequence
         for regime-analysis purposes where look-ahead is acceptable.)
         """
         X_raw = self._get_features(df)
@@ -433,7 +405,7 @@ class MarkovSwitchingNeuralNetwork:
         preds = np.empty(T)
 
         for t in range(T):
-            # --- Causal predicted probability P(s_t | y_{1:t-1}) ---
+            # Causal predicted probability P(s_t | y_{1:t-1})
             if t == 0:
                 log_pred = log_filtered          # = log π_0
             else:
@@ -443,13 +415,13 @@ class MarkovSwitchingNeuralNetwork:
             log_pred = log_pred - np.logaddexp.reduce(log_pred)
             pred_probs = np.exp(log_pred)        # (K,)
 
-            # --- Forecast: soft mixture of expert outputs (causal) ---
+            # Forecast: soft mixture of expert outputs (causal)
             expert_preds = np.array(
                 [e.predict(X[t : t + 1])[0] for e in self._experts]
             )
             preds[t] = pred_probs @ expert_preds
 
-            # --- Update filter with observed y_t ---
+            # Update filter with observed y_t
             log_obs_t = np.array([
                 -0.5 * np.log(2.0 * np.pi * self._sigmas[k] ** 2)
                 - 0.5 * ((y[t] - expert_preds[k]) / self._sigmas[k]) ** 2

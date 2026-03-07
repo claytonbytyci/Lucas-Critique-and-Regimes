@@ -8,7 +8,8 @@ DataFrame schema expected by the regime-switching models:
              roll_mean_20, roll_std_20, exog_0..2, regime
 
 Two canonical datasets are provided, each with a well-documented
-structural break point:
+structural break point (cited in my project work and which I test 
+for in the notebooks with a CUSUM test, for example).
 
   1. US Industrial Production growth — Great Moderation break (Jan 1984)
      Pre-break:  1960-01 to 1983-12  (~288 monthly obs)
@@ -17,16 +18,6 @@ structural break point:
   2. US CPI Inflation — Volcker disinflation break (Oct 1979)
      Pre-break:  1960-01 to 1979-09  (~237 monthly obs)
      Post-break: 1979-10 to 1999-09  (~240 monthly obs)
-
-References
-----------
-- Lucas, R. E. (1976). Econometric policy evaluation: A critique.
-- McConnell, M. & Perez-Quiros, G. (2000). Output fluctuations in the US.
-  American Economic Review, 90(5), 1464-1476.
-- Kim, C.-J. & Nelson, C. (1999). Has the US economy become more stable?
-  Review of Economics and Statistics, 81(4), 608-616.
-- Clarida, R., Galí, J. & Gertler, M. (2000). Monetary policy rules and
-  macroeconomic stability. Quarterly Journal of Economics, 115(1), 147-180.
 """
 
 from __future__ import annotations
@@ -41,10 +32,7 @@ import requests
 _DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "real_world"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-
-# ---------------------------------------------------------------------------
 # FRED download helper
-# ---------------------------------------------------------------------------
 
 def fetch_fred(series_id: str, start: str = "1948-01-01", cache: bool = True) -> pd.Series:
     """Download a FRED series, optionally using a local parquet cache.
@@ -70,10 +58,7 @@ def fetch_fred(series_id: str, start: str = "1948-01-01", cache: bool = True) ->
     s.index = pd.DatetimeIndex(s.index)
     return s[s.index >= start].rename(series_id)
 
-
-# ---------------------------------------------------------------------------
 # Feature builder (preserves DatetimeIndex)
-# ---------------------------------------------------------------------------
 
 def build_features(
     y: pd.Series,
@@ -81,12 +66,11 @@ def build_features(
     regime_series: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Build the model-ready DataFrame from a target series and covariates.
+    The covariates are reindexed to match y's index.
 
     The returned DataFrame preserves the DatetimeIndex of ``y`` so that
     callers can slice on dates before calling reset_index.
-
-    Parameters
-    ----------
+    Parameters:
     y : pd.Series
         Stationary target series (e.g. log-differenced GDP, % CPI change).
         Index must be a DatetimeIndex.
@@ -95,13 +79,12 @@ def build_features(
     regime_series : pd.Series, optional
         Binary 0/1 series (e.g. NBER USREC).
 
-    Returns
-    -------
+    Returns:
     pd.DataFrame  (DatetimeIndex, NaN rows from lags/rolling dropped)
     """
     df = pd.DataFrame({"y": y})
 
-    df["y_lag1"] = df["y"].shift(1)
+    df["y_lag1"] = df["y"].shift(1) # these form my vector for use in regime identification, explained in the report
     df["y_lag2"] = df["y"].shift(2)
     df["roll_mean_5"]  = df["y"].rolling(5).mean()
     df["roll_std_5"]   = df["y"].rolling(5).std()
@@ -124,10 +107,7 @@ def build_features(
 
     return df.dropna()
 
-
-# ---------------------------------------------------------------------------
 # Dataset 1: Industrial Production — Great Moderation break
-# ---------------------------------------------------------------------------
 
 def load_industrial_production() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Industrial Production (monthly log-growth), Great Moderation break.
@@ -137,10 +117,7 @@ def load_industrial_production() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     Post-break sample: 1984-01 to 2007-07  (~283 obs, stops before GFC)
     Regime labels:     NBER USREC (0=expansion, 1=recession)
 
-    Returns
-    -------
-    df_pre, df_post : pd.DataFrame  (integer-indexed)
-    meta : dict
+    Returns a dataframe with columns of the generated covariates and metadata for the break.
     """
     ip     = fetch_fred("INDPRO",    "1960-01-01")
     usrec  = fetch_fred("USREC",     "1960-01-01")
@@ -168,7 +145,6 @@ def load_industrial_production() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
         "n_post": len(df_post),
         "regime_label": "NBER USREC",
         "y_description": "Monthly log-growth of Industrial Production (%)",
-        "reference": "McConnell & Perez-Quiros (2000); Kim & Nelson (1999)",
     }
     return df_pre, df_post, meta
 
@@ -185,8 +161,7 @@ def load_cpi_volcker() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     Post-break sample: 1979-10 to 1999-09  (~240 obs)
     Regime labels:     NBER USREC
 
-    Returns
-    -------
+    Returns:
     df_pre, df_post : pd.DataFrame  (integer-indexed)
     meta : dict
     """
@@ -216,14 +191,10 @@ def load_cpi_volcker() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
         "n_post": len(df_post),
         "regime_label": "NBER USREC",
         "y_description": "Annualised monthly CPI log-growth rate (%)",
-        "reference": "Clarida, Galí & Gertler (2000); Sims & Zha (2006)",
     }
     return df_pre, df_post, meta
 
-
-# ---------------------------------------------------------------------------
 # Combined loader
-# ---------------------------------------------------------------------------
 
 def load_all_datasets() -> list[tuple[pd.DataFrame, pd.DataFrame, dict]]:
     """Return both real-world datasets as a list of (df_pre, df_post, meta)."""

@@ -1,9 +1,9 @@
 """Mixture of Experts (MoE) regime-switching model.
 
 Architecture:
-    - A *gating network* (logistic regression / softmax) outputs soft weights
+    - A gating network (logistic regression / softmax) outputs soft weights
       w_k(x) = P(regime=k | x) for each expert k.
-    - K *expert networks* (Ridge regressors) each produce a prediction
+    - K expert networks (Ridge regressors) each produce a prediction
       y_hat_k = f_k(x).
     - The final prediction is the weighted mixture:
           y_hat = sum_k w_k(x) * y_hat_k
@@ -72,9 +72,7 @@ class MixtureOfExpertsModel:
         self._scaler = StandardScaler()
         self._expert_sigmas: np.ndarray | None = None  # per-expert residual std
 
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
 
     def _build_features(self, df: pd.DataFrame) -> np.ndarray:
         cols = [c for c in _FEATURE_COLS if c in df.columns]
@@ -88,10 +86,8 @@ class MixtureOfExpertsModel:
         sigma = max(sigma, 1e-6)
         return -0.5 * ((y - mu) / sigma) ** 2 - np.log(sigma * np.sqrt(2 * np.pi))
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
-
+  
     def fit(self, df: pd.DataFrame) -> "MixtureOfExpertsModel":
         """EM training of gating + experts.
 
@@ -172,9 +168,7 @@ class MixtureOfExpertsModel:
 
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict_regimes(self, df: pd.DataFrame) -> np.ndarray:
         """Return the highest-probability expert for each row."""

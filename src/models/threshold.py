@@ -1,6 +1,6 @@
 """Threshold Autoregressive (TAR) model for regime switching.
 
-The TAR model (Tong 1978, Teräsvirta 1994) defines regimes by a threshold τ
+The TAR model defines regimes by a threshold τ
 applied to a *threshold variable* z_t (commonly y_{t-d} for delay d):
 
     y_t = (mu_0 + phi_0 * y_{t-1} + X_t' beta_0) * 1[z_t <= τ]
@@ -8,9 +8,6 @@ applied to a *threshold variable* z_t (commonly y_{t-d} for delay d):
 
 The threshold τ is selected by grid search over candidate quantiles of z,
 minimising the total in-sample sum of squared residuals.
-
-This is a *classical nonlinear* model — its parameters are fixed post-estimation
-and thus highly susceptible to the Lucas critique.
 """
 
 from __future__ import annotations
@@ -25,14 +22,14 @@ _QUANTILE_GRID = np.linspace(0.15, 0.85, 50)  # candidate threshold quantiles
 
 
 class ThresholdModel:
-    """Two-regime Threshold Autoregressive model with grid-search τ selection.
+    """Two-regime Threshold Autoregressive model with grid-search tau selection.
 
     Parameters
     ----------
     threshold_variable : str
         Column name in the DataFrame used to determine the regime (z_t).
     quantile_grid : array-like
-        Quantile values (in [0, 1]) to search over when selecting τ.
+        Quantile values (in [0, 1]) to search over when selecting tau.
     alpha : float
         Ridge regularisation for per-regime regressors.
     """
@@ -51,9 +48,7 @@ class ThresholdModel:
         self._regressors: dict[int, Ridge] = {}
         self._feature_cols: list[str] = []
 
-    # ------------------------------------------------------------------
     # Internal helpers
-    # ------------------------------------------------------------------
 
     def _build_features(self, df: pd.DataFrame) -> np.ndarray:
         cols = [c for c in _REG_FEATURE_COLS if c in df.columns]
@@ -64,12 +59,10 @@ class ThresholdModel:
         """Return 0 for z <= tau, 1 for z > tau."""
         return (z > self.tau_).astype(int)
 
-    # ------------------------------------------------------------------
     # Threshold search
-    # ------------------------------------------------------------------
 
     def _find_threshold(self, z: np.ndarray, X: np.ndarray, y: np.ndarray) -> float:
-        """Grid-search τ by minimising total SSR over candidate quantiles."""
+        """Grid-search tau by minimising total SSR over candidate quantiles."""
         best_ssr = np.inf
         best_tau = np.quantile(z, 0.5)
 
@@ -96,12 +89,10 @@ class ThresholdModel:
 
         return best_tau
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
-
+  
     def fit(self, df: pd.DataFrame) -> "ThresholdModel":
-        """Estimate the threshold τ and per-regime regressions.
+        """Estimate the threshold tau and per-regime regressions.
 
         Parameters
         ----------
@@ -127,9 +118,7 @@ class ThresholdModel:
 
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict_regimes(self, df: pd.DataFrame) -> np.ndarray:
         """Return 0 (below threshold) or 1 (above threshold) for each row."""

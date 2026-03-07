@@ -30,7 +30,7 @@ try:
 except ImportError:  # pragma: no cover
     _HMMLEARN_AVAILABLE = False
 
-# Features used for HMM observation matrix
+# Features used for HMM observation matrix from which we attempt to infer regimes
 _HMM_OBS_COLS = ["y", "y_lag1", "roll_mean_5", "roll_std_5", "roll_mean_20"]
 
 # Features used for per-regime linear regression
@@ -74,12 +74,10 @@ class HMMRegimeModel:
         self._regressors: dict[int, Ridge] = {}
         self._n_regimes_found: int = 0
 
-    # ------------------------------------------------------------------
     # Internal helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_obs_matrix(df: pd.DataFrame) -> np.ndarray:
+    def _build_obs_matrix(df: pd.DataFrame) -> np.ndarray: # this is giving us the matrix that we use to fit the HMM and decode regimes
         cols = [c for c in _HMM_OBS_COLS if c in df.columns]
         return df[cols].to_numpy(dtype=float)
 
@@ -94,22 +92,13 @@ class HMMRegimeModel:
 
     def fit(self, df: pd.DataFrame) -> "HMMRegimeModel":
         """Fit HMM on the full training sequence, then fit per-regime regressors.
-
-        Parameters
-        ----------
-        df : pd.DataFrame
-            Training DataFrame produced by :class:`simulation.dgp.MarkovSwitchingDGP`.
-
-        Returns
-        -------
-        self
         """
         obs = self._build_obs_matrix(df)
         X = self._build_feature_matrix(df)
         y = df["y"].to_numpy(dtype=float)
 
-        # Fit HMM
-        self._hmm = GaussianHMM(
+        # Fit HMM to recover the latent regimes
+        self._hmm = GaussianHMM( # this is from the library which we pass the observation matrix into, uses the Viterbi algorithm to decode regimes, and then we fit the per-regime regressors based on the decoded regimes 
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             n_iter=self.n_iter,
@@ -117,10 +106,10 @@ class HMMRegimeModel:
         )
         self._hmm.fit(obs)
 
-        # Decode training regimes via Viterbi
+        # Decode training regimes via Viterbi algorithm
         train_regimes = self._hmm.predict(obs)
 
-        # Fit per-regime regressors
+        # Fit per-regime regressors by splitting the training to their regimes
         unique_regimes = np.unique(train_regimes)
         self._n_regimes_found = len(unique_regimes)
         self._regressors = {}
@@ -140,9 +129,7 @@ class HMMRegimeModel:
 
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict_regimes(self, df: pd.DataFrame) -> np.ndarray:
         """Viterbi-decode the most likely regime sequence for ``df``."""
@@ -159,7 +146,7 @@ class HMMRegimeModel:
 
         Returns
         -------
-        log_emit : (T, K)
+        log_emit : (T, K) is log P(O_t | s_t=k) for each time t and regime k which is done in the log space for numerical stability traiditionally apparently online.
         """
         K = self.n_components
         T = len(obs)

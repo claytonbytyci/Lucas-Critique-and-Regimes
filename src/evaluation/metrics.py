@@ -24,11 +24,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import adjusted_rand_score
 
-
-# ---------------------------------------------------------------------------
 # Forecast accuracy
-# ---------------------------------------------------------------------------
-
 
 def forecast_rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Root mean squared error between true and predicted values.
@@ -86,13 +82,9 @@ def directional_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     dy_pred = np.diff(y_pred)
     return float(np.mean(np.sign(dy_true) == np.sign(dy_pred)))
 
-
-# ---------------------------------------------------------------------------
 # Regime detection
-# ---------------------------------------------------------------------------
 
-
-def regime_accuracy(
+def regime_accuracy( # I don't actually like this test because it counts the number of errors but a model that guesses frequently of a switch is penalised
     true_regimes: np.ndarray,
     pred_regimes: np.ndarray,
     allow_permutation: bool = True,
@@ -139,7 +131,7 @@ def regime_accuracy(
     return best
 
 
-def adjusted_rand_regime(
+def adjusted_rand_regime( # this is allegedly a good metric for clustering quality, invariant to label permutations, meaning that it doesn't matter what the regime is labelled, as long as the clustering vaguely matches the true clustering, it will give a high score. It can be negative if the clustering is worse than random, and 1 if it's perfect.
     true_regimes: np.ndarray, pred_regimes: np.ndarray
 ) -> float:
     """Adjusted Rand Index for clustering quality (label-permutation invariant).
@@ -182,11 +174,7 @@ def regime_conditional_rmse(
         result[int(reg)] = forecast_rmse(y_true[mask], y_pred[mask])
     return result
 
-
-# ---------------------------------------------------------------------------
 # Lucas critique summary
-# ---------------------------------------------------------------------------
-
 
 def lucas_sensitivity_ratio(
     pre_rmse: float, post_rmse: float, epsilon: float = 1e-9
@@ -204,7 +192,7 @@ def lucas_sensitivity_ratio(
     pre_rmse : float
     post_rmse : float
     epsilon : float
-        Small value to avoid division by zero.
+        Small value to avoid division by zero, if the pre-break RMSE is very small, only really an issue for MSNN.
 
     Returns
     -------

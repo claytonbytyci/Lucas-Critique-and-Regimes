@@ -100,10 +100,8 @@ class MLRegimeModel:
         self._regressors: dict[int, XGBRegressor] = {}
         self._global_regressor: XGBRegressor | None = None
 
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
-
+  
     def _cluster_features(self, df: pd.DataFrame) -> np.ndarray:
         cols = [c for c in _CLUSTER_FEATURE_COLS if c in df.columns]
         return df[cols].to_numpy(dtype=float)
@@ -112,9 +110,7 @@ class MLRegimeModel:
         cols = [c for c in _REG_FEATURE_COLS if c in df.columns]
         return df[cols].to_numpy(dtype=float)
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
 
     def fit(self, df: pd.DataFrame) -> "MLRegimeModel":
         """Two-stage training: cluster to find regimes, then fit regressors.
@@ -132,18 +128,18 @@ class MLRegimeModel:
         X_cluster = self._cluster_features(df)
         X_reg = self._reg_features(df)
 
-        # --- Stage 1a: KMeans clustering ---
+        # Stage 1a: KMeans clustering
         X_scaled = self._scaler.fit_transform(X_cluster)
         self._kmeans = KMeans(
             n_clusters=self.n_regimes, random_state=self.cluster_seed, n_init=10
         )
         cluster_labels = self._kmeans.fit_predict(X_scaled)
 
-        # --- Stage 1b: XGBoost classifier to generalise cluster labels ---
+        # Stage 1b: XGBoost classifier to generalise cluster labels
         self._classifier = XGBClassifier(**self._clf_params)
         self._classifier.fit(X_cluster, cluster_labels)
 
-        # --- Stage 2: Per-regime XGBoost regressors ---
+        # Stage 2: Per-regime XGBoost regressors
         self._regressors = {}
         for reg in range(self.n_regimes):
             mask = cluster_labels == reg
@@ -159,10 +155,8 @@ class MLRegimeModel:
 
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
-
+ 
     def predict_regimes(self, df: pd.DataFrame) -> np.ndarray:
         """Classify each row into a regime using the XGBoost classifier."""
         if self._classifier is None:

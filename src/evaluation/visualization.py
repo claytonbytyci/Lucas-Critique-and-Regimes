@@ -75,11 +75,7 @@ def plot_simulated_series(
     ax.set_ylabel("y")
     return ax
 
-
-# ---------------------------------------------------------------------------
 # Regime comparison
-# ---------------------------------------------------------------------------
-
 
 def plot_regime_comparison(
     true_regimes: np.ndarray,
@@ -132,11 +128,7 @@ def plot_regime_comparison(
     fig.tight_layout()
     return fig
 
-
-# ---------------------------------------------------------------------------
 # Rolling RMSE
-# ---------------------------------------------------------------------------
-
 
 def plot_rolling_rmse(
     rolling_dict: dict[str, pd.DataFrame],
@@ -173,11 +165,7 @@ def plot_rolling_rmse(
     ax.legend(fontsize=9)
     return ax
 
-
-# ---------------------------------------------------------------------------
 # Lucas critique summary
-# ---------------------------------------------------------------------------
-
 
 def plot_lucas_critique_results(
     comparison_df: pd.DataFrame,
@@ -225,11 +213,7 @@ def plot_lucas_critique_results(
     fig.tight_layout()
     return fig
 
-
-# ---------------------------------------------------------------------------
 # Model comparison bar
-# ---------------------------------------------------------------------------
-
 
 def plot_model_comparison_bar(
     summary_df: pd.DataFrame,
@@ -259,11 +243,7 @@ def plot_model_comparison_bar(
     ax.invert_yaxis()
     return ax
 
-
-# ---------------------------------------------------------------------------
 # Transition probability heatmap
-# ---------------------------------------------------------------------------
-
 
 def plot_regime_transition_heatmap(
     transition: np.ndarray,
@@ -303,11 +283,7 @@ def plot_regime_transition_heatmap(
     ax.set_ylabel("From regime")
     return ax
 
-
-# ---------------------------------------------------------------------------
-# Save helper
-# ---------------------------------------------------------------------------
-
+# Save helper which gives me my easily reproducible folder structure for images
 
 def save_figure(fig: plt.Figure, name: str, subdir: str = "") -> Path:
     """Save figure to the analyses/figures directory.

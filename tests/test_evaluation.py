@@ -239,3 +239,71 @@ class TestComparePrePost:
         predictions = {"M": rng.normal(0, 1, n)}
         df = compare_pre_post_performance(predictions, y_full, break_index=60)
         assert (df["LSR"] > 0).all()
+
+
+# ---------------------------------------------------------------------------
+# Recursive CUSUM
+# ---------------------------------------------------------------------------
+
+
+class TestRecursiveCUSUM:
+    def _stable_data(self, n: int = 150) -> tuple:
+        rng = np.random.default_rng(42)
+        X = np.column_stack([np.ones(n), rng.normal(0, 1, n)])
+        y = X @ np.array([1.0, 0.5]) + rng.normal(0, 0.5, n)
+        return y, X
+
+    def _break_data(self, n: int = 300, break_at: int = 150) -> tuple:
+        rng = np.random.default_rng(0)
+        X = np.column_stack([np.ones(n), rng.normal(0, 1, n)])
+        y = np.zeros(n)
+        y[:break_at] = X[:break_at] @ np.array([0.0, 1.0]) + rng.normal(0, 0.1, break_at)
+        y[break_at:] = X[break_at:] @ np.array([15.0, 1.0]) + rng.normal(0, 0.1, n - break_at)
+        return y, X
+
+    def test_returns_expected_keys(self) -> None:
+        y, X = self._stable_data()
+        result = recursive_cusum(y, X)
+        for key in ("cusum", "upper_bound", "lower_bound", "break_detected", "break_index"):
+            assert key in result
+
+    def test_cusum_is_ndarray(self) -> None:
+        y, X = self._stable_data()
+        result = recursive_cusum(y, X)
+        assert isinstance(result["cusum"], np.ndarray)
+
+    def test_cusum_length(self) -> None:
+        y, X = self._stable_data(n=100)
+        result = recursive_cusum(y, X)
+        # Recursive residuals start at index p=2, so cusum has n-p entries
+        assert len(result["cusum"]) == len(y) - X.shape[1]
+
+    def test_bounds_symmetric_and_positive(self) -> None:
+        y, X = self._stable_data()
+        result = recursive_cusum(y, X)
+        assert np.all(result["upper_bound"] > 0)
+        assert np.all(result["lower_bound"] < 0)
+        np.testing.assert_array_equal(result["upper_bound"], -result["lower_bound"])
+
+    def test_break_index_none_when_no_break(self) -> None:
+        y, X = self._stable_data()
+        result = recursive_cusum(y, X)
+        if not result["break_detected"]:
+            assert result["break_index"] is None
+
+    def test_detects_large_break(self) -> None:
+        y, X = self._break_data()
+        result = recursive_cusum(y, X)
+        assert result["break_detected"] is True
+        assert result["break_index"] is not None
+
+    def test_break_index_within_cusum_range(self) -> None:
+        y, X = self._break_data()
+        result = recursive_cusum(y, X)
+        if result["break_detected"]:
+            assert 0 <= result["break_index"] < len(result["cusum"])
+
+    def test_break_detected_is_bool(self) -> None:
+        y, X = self._stable_data()
+        result = recursive_cusum(y, X)
+        assert isinstance(result["break_detected"], bool)

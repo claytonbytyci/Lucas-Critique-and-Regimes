@@ -68,11 +68,7 @@ except ImportError:
 _RESULTS_DIR = Path(__file__).resolve().parents[2] / "data" / "simulated"
 _FIGURES_DIR = Path(__file__).resolve().parents[2] / "analyses" / "figures"
 
-
-# ---------------------------------------------------------------------------
 # Result container
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class ModelEvaluation:
@@ -127,12 +123,6 @@ class ExperimentResult:
         ascending = metric != "pre_regime_acc"
         return str(self.summary.sort_values(metric, ascending=ascending).iloc[0]["model"])
 
-
-# ---------------------------------------------------------------------------
-# Experiment class
-# ---------------------------------------------------------------------------
-
-
 class LucasCritiqueExperiment:
     """Orchestrates the full Lucas-critique simulation experiment.
 
@@ -169,9 +159,7 @@ class LucasCritiqueExperiment:
         self.include_msm = include_msm and _MSM_AVAILABLE
         self.run_chow = run_chow
 
-    # ------------------------------------------------------------------
     # Build model registry
-    # ------------------------------------------------------------------
 
     def _build_models(self) -> dict:
         models: dict = {}
@@ -185,11 +173,11 @@ class LucasCritiqueExperiment:
             except Exception:
                 pass
 
-        # --- Classical parametric baselines (no regime switching) ---
+        # Classical parametric baselines (no regime switching)
         models["AR(2) Baseline"] = ARModel(order=2, include_exog=True)
         models["ARMA(2,1) Baseline"] = ARMAModel(p=2, q=1, trend="c")
 
-        # --- Regime-switching models ---
+        # Regime-switching models
         models["HMM"] = HMMRegimeModel(n_components=2, random_state=42)
         models["Threshold (TAR)"] = ThresholdModel()
         models["ML Regime (XGB)"] = MLRegimeModel(n_regimes=2)
@@ -204,9 +192,7 @@ class LucasCritiqueExperiment:
 
         return models
 
-    # ------------------------------------------------------------------
     # Evaluate one model
-    # ------------------------------------------------------------------
 
     def _evaluate_model(
         self,
@@ -290,21 +276,10 @@ class LucasCritiqueExperiment:
             post_ari=float(post_ari),
         )
 
-    # ------------------------------------------------------------------
     # Main run
-    # ------------------------------------------------------------------
-
+ 
     def run(self, verbose: bool = True) -> ExperimentResult:
         """Execute the full experiment.
-
-        Parameters
-        ----------
-        verbose : bool
-            If True, print progress to stdout.
-
-        Returns
-        -------
-        ExperimentResult
         """
         if verbose:
             print("=" * 60)
@@ -314,7 +289,7 @@ class LucasCritiqueExperiment:
             print(f"  n_pre={self.n_pre}, n_post={self.n_post}")
             print()
 
-        # --- Step 1: Simulate data ---
+        # Step 1: Simulate data
         if verbose:
             print("[1] Simulating pre-break and post-break samples ...")
         df_pre, df_post, post_dgp = simulate_pre_post_break(
@@ -328,10 +303,10 @@ class LucasCritiqueExperiment:
             print(f"    Post-break regime counts: {post_regime_counts}")
             print()
 
-        # --- Step 2: Build models ---
+        # Step 2: Build models
         models = self._build_models()
 
-        # --- Step 3: Fit and evaluate ---
+        # Step 3: Fit and evaluate
         if verbose:
             print("[2] Training and evaluating models on pre-break data ...")
         evaluations: list[ModelEvaluation] = []
@@ -350,7 +325,7 @@ class LucasCritiqueExperiment:
                         f"LSR={result.lsr:.3f}"
                     )
 
-        # --- Step 3b: Model Average Ensemble ---
+        # Step 3b: Model Average Ensemble
         if len(pred_store) >= 2:
             y_pre_arr = df_pre["y"].to_numpy()
             y_post_arr = df_post["y"].to_numpy()
@@ -382,7 +357,7 @@ class LucasCritiqueExperiment:
                     f"post_rmse={ens_eval.post_rmse:.4f}  LSR={ens_eval.lsr:.3f}"
                 )
 
-        # --- Step 4: Chow test ---
+        # Chow test
         chow_result = None
         if self.run_chow and len(df_pre) > 20:
             if verbose:
@@ -404,7 +379,7 @@ class LucasCritiqueExperiment:
                 if verbose:
                     print(f"    Chow test failed: {exc}")
 
-        # --- Step 5: Save results ---
+        # Save results
         _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         df_pre.to_parquet(_RESULTS_DIR / "pre_break.parquet", index=False)
         df_post.to_parquet(_RESULTS_DIR / "post_break.parquet", index=False)
@@ -425,10 +400,7 @@ class LucasCritiqueExperiment:
 
         return result
 
-
-# ---------------------------------------------------------------------------
-# Executable entry point
-# ---------------------------------------------------------------------------
+# Executable entry point from the command line interface
 
 if __name__ == "__main__":
     exp = LucasCritiqueExperiment(n_pre=500, n_post=200)

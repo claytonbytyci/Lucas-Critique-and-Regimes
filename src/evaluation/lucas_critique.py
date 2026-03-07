@@ -22,13 +22,9 @@ from scipy import stats
 
 from .metrics import forecast_rmse
 
-
-# ---------------------------------------------------------------------------
 # Chow test
-# ---------------------------------------------------------------------------
 
-
-def chow_test(
+def chow_test( # this is a standard test for a known break point in econometrics
     y: np.ndarray,
     X: np.ndarray,
     break_index: int,
@@ -92,13 +88,10 @@ def chow_test(
         "reject_H0": p_value < 0.05,
     }
 
-
-# ---------------------------------------------------------------------------
 # CUSUM of recursive residuals
-# ---------------------------------------------------------------------------
 
-
-def recursive_cusum(
+def recursive_cusum( # this is another standard parameter instability test which I use
+    # to capture the Lucas-style critique that fundamental parameters change and is also a structural break test
     y: np.ndarray,
     X: np.ndarray,
     significance: float = 0.05,
@@ -161,11 +154,7 @@ def recursive_cusum(
         "break_index": break_index,
     }
 
-
-# ---------------------------------------------------------------------------
 # Rolling performance
-# ---------------------------------------------------------------------------
-
 
 def compute_rolling_performance(
     y_true: np.ndarray,
@@ -198,11 +187,7 @@ def compute_rolling_performance(
 
     return pd.DataFrame({"t": np.arange(n), "rolling_rmse": rmse_vals})
 
-
-# ---------------------------------------------------------------------------
 # Pre/post comparison
-# ---------------------------------------------------------------------------
-
 
 def compare_pre_post_performance(
     predictions: dict[str, np.ndarray],

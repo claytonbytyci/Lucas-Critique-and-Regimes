@@ -17,17 +17,9 @@ ARModel
 
 ARMAModel
     Autoregressive moving-average model estimated via statsmodels ARIMA(p, 0, q).
-    The MA component captures autocorrelation in residuals that the AR terms
-    miss.  Out-of-sample predictions are produced by applying the fitted model
-    to new observations via the statsmodels `apply()` method, which uses a
-    Kalman-filter one-step-ahead recursion: at each t the prediction is formed
-    from the information set {y_1, ..., y_{t-1}} only, respecting causality.
 
-References
-----------
-- Box, G. E. P. & Jenkins, G. M. (1976). *Time Series Analysis: Forecasting
-  and Control*. Holden-Day.
-- Sims, C. A. (1980). Macroeconomics and reality. *Econometrica*, 48(1), 1–48.
+ModelAverageEnsemble
+    Which equally weights all models.
 """
 
 from __future__ import annotations
@@ -38,19 +30,12 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-
-# ---------------------------------------------------------------------------
 # Feature columns shared by both models
-# ---------------------------------------------------------------------------
 
 _LAG_COLS = ["y_lag1", "y_lag2"]
 _EXOG_COLS = ["exog_0", "exog_1", "exog_2"]
 
-
-# ---------------------------------------------------------------------------
 # AR(p) — OLS autoregression
-# ---------------------------------------------------------------------------
-
 
 class ARModel:
     """OLS autoregression of order p with optional exogenous regressors.
@@ -89,9 +74,7 @@ class ARModel:
         self._coef: np.ndarray | None = None  # [intercept, beta_1, ..., gammas]
         self._feature_names: list[str] = []
 
-    # ------------------------------------------------------------------
     # Internal helpers
-    # ------------------------------------------------------------------
 
     def _feature_cols(self) -> list[str]:
         cols = _LAG_COLS[: self.order]
@@ -104,10 +87,8 @@ class ARModel:
         X = df[cols].to_numpy(dtype=float)
         return np.column_stack([np.ones(len(X)), X])  # prepend intercept
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
-
+    
     def fit(self, df: pd.DataFrame) -> "ARModel":
         """Estimate AR coefficients by OLS (or Ridge) on pre-break data.
 
@@ -136,9 +117,7 @@ class ARModel:
         self._coef = coef
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict(self, df: pd.DataFrame) -> np.ndarray:
         """One-step-ahead forecasts using frozen pre-break coefficients.
@@ -161,9 +140,7 @@ class ARModel:
         """Returns all zeros — the AR model assumes a single homogeneous regime."""
         return np.zeros(len(df), dtype=int)
 
-    # ------------------------------------------------------------------
     # Summary
-    # ------------------------------------------------------------------
 
     def summary(self) -> str:
         if self._coef is None:
@@ -173,11 +150,7 @@ class ARModel:
             lines.append(f"  {name:20s}: {val:+.6f}")
         return "\n".join(lines)
 
-
-# ---------------------------------------------------------------------------
 # ARMA(p, q) — statsmodels ARIMA
-# ---------------------------------------------------------------------------
-
 
 class ARMAModel:
     """ARMA(p, q) model estimated via statsmodels ARIMA(p, 0, q).
@@ -193,8 +166,7 @@ class ARMAModel:
     are produced by applying the frozen parameters to the new y observations
     via a Kalman-filter recursion: at each step t the MA innovations are
     updated using the actual y_t, but the ARMA coefficients (phi, theta) and
-    sigma are never re-estimated.  This mirrors the Lucas Critique experiment
-    design — parameters are frozen at the structural break.
+    sigma are never re-estimated. This preserves the causal and non-look ahead nature of the evaluation.
 
     Parameters
     ----------
@@ -219,9 +191,7 @@ class ARMAModel:
         self._result = None
         self._y_train: np.ndarray | None = None
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
 
     def fit(self, df: pd.DataFrame) -> "ARMAModel":
         """Fit ARMA(p, q) by MLE on pre-break training data.
@@ -250,9 +220,7 @@ class ARMAModel:
 
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict(self, df: pd.DataFrame) -> np.ndarray:
         """One-step-ahead ARMA predictions with frozen coefficients.
@@ -322,28 +290,20 @@ class ARMAModel:
         """Returns all zeros — ARMA assumes a single homogeneous regime."""
         return np.zeros(len(df), dtype=int)
 
-    # ------------------------------------------------------------------
     # Summary
-    # ------------------------------------------------------------------
 
     def summary(self) -> str:
         if self._result is None:
             return "ARMAModel: not fitted."
         return str(self._result.summary())
 
-
-# ---------------------------------------------------------------------------
 # Model Average Ensemble
-# ---------------------------------------------------------------------------
-
 
 class ModelAverageEnsemble:
     """Equal-weighted average of predictions from a collection of fitted models.
 
     The ensemble produces a forecast combination by averaging the one-step-ahead
-    predictions of all constituent models:
-
-        \\hat{y}_t^{\\text{avg}} = \\frac{1}{M} \\sum_{m=1}^{M} \\hat{y}_t^{(m)}
+    predictions of all constituent models.
 
     Forecast combination is a classical tool for improving robustness: by
     averaging across models with different parametric structures and different
@@ -355,11 +315,11 @@ class ModelAverageEnsemble:
 
     This class has two usage patterns:
 
-    1. **Pass pre-fitted models** (no fit step needed):
-       ``ensemble = ModelAverageEnsemble(fitted_models); preds = ensemble.predict(df)``
+    1. Pass pre-fitted models (no fit step needed):
+       ensemble = ModelAverageEnsemble(fitted_models); preds = ensemble.predict(df)
 
-    2. **Fit from scratch**:
-       ``ensemble = ModelAverageEnsemble(unfitted_models); ensemble.fit(df_train)``
+    2. Fit from scratch:
+       ensemble = ModelAverageEnsemble(unfitted_models); ensemble.fit(df_train)
 
     Parameters
     ----------
@@ -370,13 +330,6 @@ class ModelAverageEnsemble:
     weights : array-like of float, optional
         Weights for each model.  If None, equal weights (1/M each) are used.
         Weights are normalised to sum to 1.
-
-    References
-    ----------
-    - Bates, J. M. & Granger, C. W. J. (1969). The combination of forecasts.
-      *Operational Research Quarterly*, 20(4), 451–468.
-    - Timmermann, A. (2006). Forecast combinations. In Elliott, G., Granger,
-      C. W. J. & Timmermann, A. (Eds.), *Handbook of Economic Forecasting*.
     """
 
     def __init__(
@@ -391,10 +344,8 @@ class ModelAverageEnsemble:
         else:
             self._weights = None  # equal weights computed at predict time
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
-
+  
     def fit(self, df: "pd.DataFrame") -> "ModelAverageEnsemble":
         """Fit all constituent models on the training DataFrame.
 
@@ -417,9 +368,7 @@ class ModelAverageEnsemble:
                 print(f"  [ModelAverageEnsemble] {name} fit failed: {exc}")
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict(self, df: "pd.DataFrame") -> "np.ndarray":
         """Weighted average of all model one-step-ahead forecasts.
@@ -491,9 +440,7 @@ class ModelAverageEnsemble:
         mode_result = _stats.mode(stack, axis=0, keepdims=False)
         return mode_result.mode.astype(int)
 
-    # ------------------------------------------------------------------
     # Summary
-    # ------------------------------------------------------------------
 
     def summary(self) -> str:
         members = ", ".join(self.models.keys())

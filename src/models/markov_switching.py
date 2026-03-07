@@ -60,10 +60,8 @@ class MarkovSwitchingModel:
         self._result = None
         self._y_train: np.ndarray | None = None
 
-    # ------------------------------------------------------------------
     # Fit
-    # ------------------------------------------------------------------
-
+   
     def fit(self, df: pd.DataFrame) -> "MarkovSwitchingModel":
         """Fit the Markov-switching model on training data.
 
@@ -99,9 +97,7 @@ class MarkovSwitchingModel:
         self._y_train = y
         return self
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
 
     def predict(self, df: pd.DataFrame) -> np.ndarray:
         """One-step-ahead predictions on new data.
@@ -165,10 +161,8 @@ class MarkovSwitchingModel:
             preds += regime_probs[j] * (mu_j + phi_j * y_lag1)
         return preds
 
-    # ------------------------------------------------------------------
     # Regime labels
-    # ------------------------------------------------------------------
-
+   
     def predict_regimes(self, df: pd.DataFrame) -> np.ndarray:
         """Return the most-likely regime at each time step.
 
@@ -198,10 +192,8 @@ class MarkovSwitchingModel:
             probs, columns=[f"P(regime={k})" for k in range(self.k_regimes)]
         )
 
-    # ------------------------------------------------------------------
     # Summary
-    # ------------------------------------------------------------------
-
+   
     def summary(self) -> str:
         if self._result is None:
             return "Model not fitted."

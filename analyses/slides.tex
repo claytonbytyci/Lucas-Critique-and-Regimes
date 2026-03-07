@@ -380,6 +380,74 @@ yhat   = regressors[regime].predict(x_new)
 
 \end{frame}
 
+\begin{frame}{The Viterbi Algorithm: Decoding Hidden States}
+
+  \footnotesize
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Goal:} find the most probable hidden-state sequence:
+      $s^*_{1:T} = \arg\max_{s_{1:T}} P(s_{1:T} \mid \mathbf{O}_{1:T})$
+
+      \smallskip
+      \textbf{Dynamic programming in log-space} ($K$ states, $T$ steps):
+
+      \vspace{3pt}
+      \textbf{1. Initialise:}\;
+      $\log\delta_1(k) = \log\pi_k + \log b_k(\mathbf{O}_1)$
+
+      \vspace{3pt}
+      \textbf{2. Recurse} $t=2,\dots,T$, storing backpointers $\psi_t(k)$:\\
+      $\log\delta_t(k) = \max_j[\log\delta_{t-1}(j)+\log A_{jk}] + \log b_k(\mathbf{O}_t)$
+
+      \vspace{3pt}
+      \textbf{3. Backtrack} from $s^*_T = \arg\max_k\log\delta_T(k)$:\\
+      $s^*_t = \psi_{t+1}(s^*_{t+1}),\quad t = T{-}1,\dots,1$
+
+      \vspace{5pt}
+      \begin{center}
+      \begin{tabular}{lcc}
+        \toprule
+        & \textbf{Viterbi} & \textbf{Fwd-bwd smoother} \\
+        \midrule
+        Output & hard $s^*_t \in \{0,1\}$ & soft $\gamma_t(k)\in(0,1)$ \\
+        Operation & $\max$ over paths & sum over paths \\
+        Training use & decoding (HMM) & E-step (MSNN) \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \textbf{HMM + Ridge}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item \textit{Train:} Viterbi decodes $s^*_{1:T}$ $\to$ each regime
+              subset trains a Ridge regressor.
+        \item \textit{Forecast:} causal \textbf{forward filter} (not Viterbi)
+              — conditions only on past observations; no look-ahead.
+      \end{itemize}
+
+      \vspace{3pt}
+      \textbf{MSNN}
+      \begin{itemize}\setlength\itemsep{0pt}
+        \item \textit{Train (E-step):} \textbf{forward-backward smoother}
+              computes soft $\gamma_t(k)$ for weighted MLP updates.
+              Viterbi is \emph{not} used during training.
+        \item \textit{Forecast:} extend Viterbi path one step to select
+              the current regime's MLP expert.
+      \end{itemize}
+
+      \vspace{4pt}
+      \begin{alertblock}{Hard vs.\ soft: the Lucas-stability link}
+        \textbf{Viterbi} gives a hard assignment (one state per $t$).
+        The \textbf{forward-backward smoother} gives soft
+        $\gamma_t(k)\in(0,1)$ — letting HMM partially adapt to a shifted
+        emission distribution \emph{without re-training}.
+        This is why HMM achieves the lowest LSR in all four experiments.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
 \begin{frame}[fragile]{ML Regime (XGB) \& Mixture of Experts}
 
   \begin{columns}[T]

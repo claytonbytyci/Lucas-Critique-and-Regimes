@@ -18,17 +18,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-# ---------------------------------------------------------------------------
-# Path helpers
-# ---------------------------------------------------------------------------
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SIMULATED_DATA_DIR = _PROJECT_ROOT / "data" / "simulated"
-
-
-# ---------------------------------------------------------------------------
-# Regime parameter container
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class RegimeParams:
@@ -64,11 +55,7 @@ _DEFAULT_TRANSITION: np.ndarray = np.array(
      [0.15, 0.85]]
 )
 
-
-# ---------------------------------------------------------------------------
 # Main DGP class
-# ---------------------------------------------------------------------------
-
 
 class MarkovSwitchingDGP:
     """Markov-switching AR(1) data-generating process with observable features.
@@ -107,9 +94,7 @@ class MarkovSwitchingDGP:
 
         self._validate()
 
-    # ------------------------------------------------------------------
     # Validation
-    # ------------------------------------------------------------------
 
     def _validate(self) -> None:
         K = len(self.regimes)
@@ -127,9 +112,7 @@ class MarkovSwitchingDGP:
                     f"Regime '{r.label}' has |phi|={abs(r.phi):.3f} >= 1 (non-stationary)"
                 )
 
-    # ------------------------------------------------------------------
     # Stationary distribution
-    # ------------------------------------------------------------------
 
     @property
     def stationary_distribution(self) -> np.ndarray:
@@ -141,9 +124,7 @@ class MarkovSwitchingDGP:
         b[-1] = 1.0
         return np.linalg.solve(A, b)
 
-    # ------------------------------------------------------------------
     # Simulation
-    # ------------------------------------------------------------------
 
     def simulate(self, n_obs: int = 600) -> pd.DataFrame:
         """Simulate ``n_obs`` observations from the Markov-switching AR(1).
@@ -163,21 +144,21 @@ class MarkovSwitchingDGP:
         rng = np.random.default_rng(self.seed)
         K = len(self.regimes)
 
-        # --- Simulate hidden Markov chain ---
+        # Simulate hidden Markov chain
         pi = self.stationary_distribution
         s = np.empty(n_obs, dtype=int)
         s[0] = rng.choice(K, p=pi)
         for t in range(1, n_obs):
             s[t] = rng.choice(K, p=self.transition[s[t - 1]])
 
-        # --- Simulate AR(1) series conditional on regime ---
+        # Simulate AR(1) series conditional on regime 
         y = np.empty(n_obs)
         y[0] = self.regimes[s[0]].mu / (1 - self.regimes[s[0]].phi + 1e-9)
         for t in range(1, n_obs):
             r = self.regimes[s[t]]
             y[t] = r.mu + r.phi * y[t - 1] + rng.normal(0.0, r.sigma)
 
-        # --- Observable features ---
+        # Observable features
         df = pd.DataFrame({"y": y, "regime": s})
         df["regime_label"] = df["regime"].map(
             {i: r.label for i, r in enumerate(self.regimes)}
@@ -201,13 +182,11 @@ class MarkovSwitchingDGP:
             ) + rng.normal(0, 1.0, n_obs)
             df[f"exog_{k}"] = regime_signal
 
-        # Drop NaN rows from lags / rolling windows
+        # Drop NaN rows from lags / rolling windows (there will only be some at the start)
         df = df.dropna().reset_index(drop=True)
         return df
 
-    # ------------------------------------------------------------------
     # Persistence
-    # ------------------------------------------------------------------
 
     def save(self, df: pd.DataFrame, name: str = "base") -> Path:
         """Save simulated DataFrame to parquet in the data/simulated directory."""
@@ -216,9 +195,7 @@ class MarkovSwitchingDGP:
         df.to_parquet(path, index=False)
         return path
 
-    # ------------------------------------------------------------------
     # Repr
-    # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
         regime_str = ", ".join(

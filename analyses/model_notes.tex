@@ -1,0 +1,833 @@
+\documentclass[11pt, a4paper]{article}
+
+% ── Packages ────────────────────────────────────────────────────────────────
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{array}
+
+\definecolor{darkblue}{RGB}{0,50,100}
+\definecolor{darkred}{RGB}{150,0,0}
+\definecolor{mygreen}{RGB}{0,100,50}
+\definecolor{lightblue}{RGB}{230,240,255}
+\definecolor{lightyellow}{RGB}{255,252,230}
+\definecolor{lightgreen}{RGB}{230,250,235}
+\definecolor{lightred}{RGB}{255,235,235}
+\definecolor{codegrey}{RGB}{245,245,245}
+
+% ── Section formatting ───────────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries\color{darkblue}}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{darkblue}}{}{0em}{}
+
+% ── Coloured left-bar boxes (reliable with list environments) ────────────────
+\definecolor{gold}{RGB}{180,140,0}
+
+\newenvironment{intubox}{%
+  \vspace{4pt}\par\noindent%
+  {\color{darkblue}\vrule width 3pt}\hspace{6pt}%
+  \begin{minipage}{\dimexpr\linewidth-9pt\relax}\vspace{2pt}%
+}{%
+  \vspace{2pt}\end{minipage}\par\vspace{4pt}%
+}
+
+\newenvironment{notebox}{%
+  \vspace{4pt}\par\noindent%
+  {\color{gold}\vrule width 3pt}\hspace{6pt}%
+  \begin{minipage}{\dimexpr\linewidth-9pt\relax}\vspace{2pt}%
+}{%
+  \vspace{2pt}\end{minipage}\par\vspace{4pt}%
+}
+
+\newenvironment{greenbox}{%
+  \vspace{4pt}\par\noindent%
+  {\color{mygreen}\vrule width 3pt}\hspace{6pt}%
+  \begin{minipage}{\dimexpr\linewidth-9pt\relax}\vspace{2pt}%
+}{%
+  \vspace{2pt}\end{minipage}\par\vspace{4pt}%
+}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{darkblue}\bfseries,
+  commentstyle=\color{mygreen}\itshape,
+  backgroundcolor=\color{codegrey},
+  frame=single,
+  framerule=0.4pt,
+  breaklines=true,
+  showstringspaces=false,
+  numbers=none,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  aboveskip=4pt,
+  belowskip=4pt,
+}
+
+\newcommand{\LSR}{\mathrm{LSR}}
+
+% ════════════════════════════════════════════════════════════════════════════
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries\color{darkblue} The Lucas Critique in ML: Model Notes}\\[6pt]
+  {\large An Intuitive Guide to Every Modelling and Estimation Choice}\\[4pt]
+  {\normalsize 4815L \quad --- \quad D200 Machine Learning in Economics}
+\end{center}
+
+\medskip
+
+\begin{notebox}
+\textbf{Purpose of this document.}
+This note walks through every modelling and estimation choice in the project
+from first principles. The goal is intuition: why was this approach chosen,
+what is the algorithm actually \emph{doing}, and how does it relate to the
+others? Mathematics is kept to the minimum needed to be precise.
+\end{notebox}
+
+\tableofcontents
+
+\newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{The Data-Generating Process (DGP)}
+\label{sec:dgp}
+
+\subsection{What it is}
+
+The simulated data comes from a \textbf{Markov-switching AR(1)} process:
+\[
+  y_t = \mu_{s_t} + \phi_{s_t}\,y_{t-1} + \sigma_{s_t}\,\varepsilon_t,
+  \qquad \varepsilon_t \overset{\text{iid}}{\sim} \mathcal{N}(0,1),
+  \qquad s_t \in \{0,1\}
+\]
+
+The regime $s_t$ switches between 0 (expansion) and 1 (recession) according
+to a Markov chain: the probability of staying in regime 0 is $P_{00}=0.95$ and
+of staying in regime 1 is $P_{11}=0.90$. Think of $y_t$ as something like
+monthly GDP growth: it follows an AR(1) in normal times, but with a different
+mean, persistence, and volatility during recessions.
+
+\begin{intubox}
+\textbf{Intuition.}
+The economy flips between two ``modes'' (expansion and recession). Within each
+mode the series behaves like a standard autoregression, but the parameters ---
+mean, persistence, volatility --- are different in each mode. The \emph{regime
+identity} $s_t$ is \textbf{latent}: you can never directly observe whether you
+are in regime 0 or 1. All you see is the time series $y_t$. Every model in this
+project tries to infer $s_t$ from $y_t$ and use that inference to forecast.
+\end{intubox}
+
+\subsection{Why simulate?}
+
+With simulated data the true $s_t$ is known. This lets us measure how accurately
+each model \emph{recovers the regimes} (regime accuracy, Adjusted Rand Index),
+not just how well it forecasts. We can also control the structural break exactly:
+we know the true parameters before and after, so we know how hard the problem is.
+
+\subsection{The structural break (Lucas shift)}
+
+After the training period, the DGP parameters change. The regime labels stay the
+same (still 0 and 1) but the mean, volatility, and transition probabilities shift.
+Models trained on the old parameters must now forecast under the new ones without
+being told anything changed. This is the Lucas Critique in action.
+
+Two shift scenarios are used:
+
+\begin{center}
+\begin{tabular}{lcccc}
+  \toprule
+  Parameter & Pre-break & Mild post & Severe post & Effect \\
+  \midrule
+  $\mu_0$ (expansion mean) & 0.5 & 0.2 & $-$0.5 & Lower mean growth \\
+  $\mu_1$ (recession mean) & $-$1.5 & $-$1.0 & $-$3.0 & Deeper recessions \\
+  $\sigma_0$ (expansion vol) & 1.0 & 1.3 & 2.0 & More volatile \\
+  $\sigma_1$ (recession vol) & 2.5 & 3.0 & 4.5 & Much more volatile \\
+  $P_{00}$ (expansion persist.) & 0.95 & 0.90 & 0.80 & Shorter expansions \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The ``mild'' shift resembles a gradual policy tightening. The ``severe'' shift
+resembles the Volcker disinflation: a fundamental change in regime transition
+dynamics on top of parameter changes.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Evaluation Framework}
+
+\subsection{The Lucas Sensitivity Ratio (LSR)}
+
+All models are trained on pre-break data only, then frozen. The LSR compares
+post-break forecast accuracy to pre-break accuracy:
+\[
+  \LSR = \frac{\text{RMSE}_\text{post}}{\text{RMSE}_\text{pre}}
+\]
+
+A model with LSR $>1$ performs worse after the break. LSR $=1$ means no
+degradation. LSR $<1$ (which occurs for the Great Moderation break) means the
+model actually \emph{improves} after the break because post-break data is less
+noisy.
+
+\begin{notebox}
+\textbf{Important nuance.}
+LSR is a \emph{relative} metric. A model with very low pre-break RMSE (because
+it memorises training data) will mechanically have a high LSR, even if its
+absolute post-break RMSE is reasonable. The XGB model is the clearest example:
+pre-break RMSE of 0.40 produces LSR $=8.43$, even though the post-break RMSE of
+3.34 is not the worst in absolute terms.
+\end{notebox}
+
+\subsection{Structural break tests}
+
+Two formal tests are applied to detect whether a break occurred at all.
+
+\textbf{Chow test.} Fits a single regression over the full sample and two
+separate regressions (pre- and post-break). If the two sub-sample regressions
+fit much better than the pooled one, the parameters must have shifted. The
+$F$-statistic compares the reduction in residual sum of squares.
+
+\begin{intubox}
+\textbf{Intuition.}
+Imagine fitting a straight line through two clouds of points and then fitting
+two separate lines, one for each cloud. If the two-line fit is dramatically
+better, the clouds must come from different underlying relationships. The Chow
+test formalises this comparison.
+\end{intubox}
+
+\textbf{CUSUM test.} Computes the cumulative sum of prediction residuals over
+time. Under parameter stability, the cumulative sum should wander randomly
+around zero. A systematic drift away from zero signals that something has
+changed. The test plots a running total and checks whether it strays outside
+5\% significance bands.
+
+The Chow test detects \emph{parameter} shifts in an AR model. It
+does not detect a shift in \emph{transition dynamics} alone --- which is why it
+correctly detects the Great Moderation (a variance shift) but fails to detect
+the Volcker break (primarily a regime dynamics shift).
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 1: AR(2) and ARMA(2,1) Baselines}
+
+\subsection{What they are}
+
+The \textbf{AR(2)} model says the current value depends linearly on the two
+most recent values plus noise:
+\[
+  y_t = c + \phi_1 y_{t-1} + \phi_2 y_{t-2} + \varepsilon_t
+\]
+
+The \textbf{ARMA(2,1)} adds a moving average term: the current error also
+depends on last period's error:
+\[
+  y_t = c + \phi_1 y_{t-1} + \phi_2 y_{t-2} + \varepsilon_t + \theta\,\varepsilon_{t-1}
+\]
+
+\subsection{How they are estimated}
+
+AR(2) is estimated by OLS: just regress $y_t$ on $y_{t-1}$ and $y_{t-2}$.
+ARMA is estimated by maximum likelihood, using a Kalman filter to compute
+the likelihood of the observed series given the parameters, then optimising
+over $(\phi_1, \phi_2, \theta)$.
+
+\subsection{Why include them?}
+
+These are the \emph{benchmark}. They have no regime-switching at all. Their
+purpose is to ask: does any of the complexity of regime-switching actually
+help? If regime-switching models do not outperform a simple AR(2), the extra
+complexity is not justified.
+
+\begin{intubox}
+\textbf{Intuition.}
+AR(2) is essentially asking: ``given where I was in the last two periods, where
+am I likely to be now?'' It treats the economy as a single, stable linear
+process. The Lucas Critique predicts it will degrade after a structural break
+--- and it does, with LSR around 1.66 for the mild shift. But because it fits
+the pre-break data modestly (RMSE $\approx 1.63$), it does not have a large
+denominator inflating its LSR.
+\end{intubox}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 2: Markov Switching Regression (MSM)}
+
+\subsection{What it is}
+
+The MSM is Hamilton's (1989) classical regime-switching model. It assumes the
+data actually \emph{comes from} the Markov-switching DGP we described above:
+\[
+  y_t = \mu_{s_t} + \phi_{s_t}\,y_{t-1} + \sigma_{s_t}\,\varepsilon_t
+\]
+where $s_t$ follows a two-state Markov chain. This is the \emph{correctly
+specified} model for our simulated data: the DGP is MS-AR(1), and so is the
+MSM.
+
+\subsection{How it is estimated: the Hamilton EM algorithm}
+
+The challenge is that $s_t$ is unobserved. We cannot simply OLS-regress $y_t$
+on $y_{t-1}$ because we do not know which regime's parameters to use at each
+$t$.
+
+The solution is the \textbf{EM (Expectation-Maximisation) algorithm}, a
+general approach for estimating models with missing data. For the MSM:
+
+\medskip
+\textbf{E-step (Hamilton filter): infer regimes from data.}
+Given current parameter guesses $(\hat\mu_k, \hat\phi_k, \hat\sigma_k, \hat{P})$,
+compute the probability of being in each regime at each time step. This is done
+recursively: the probability of being in state $k$ at time $t$ is proportional to
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item How likely the observed $y_t$ is under regime $k$'s parameters
+        (the Gaussian likelihood $\mathcal{N}(y_t;\,\hat\mu_k + \hat\phi_k y_{t-1},\,\hat\sigma_k^2)$).
+  \item The probability of \emph{transitioning into} regime $k$ from wherever
+        we were last period (the transition probability from the Markov chain).
+\end{enumerate}
+
+Running this forward through the data gives ``filtered'' regime probabilities.
+Running a backward smoother then refines these using future data.
+
+\medskip
+\textbf{M-step: re-estimate parameters given inferred regimes.}
+Using the regime probabilities from the E-step as soft weights, re-estimate
+$(\mu_k, \phi_k, \sigma_k)$ by weighted least squares, and re-estimate $P$ by
+counting weighted transition frequencies.
+
+\medskip
+Alternate E-step and M-step until convergence (parameters stop changing).
+
+\begin{intubox}
+\textbf{Intuition.}
+Imagine trying to learn two different linear regression models from data where
+you do not know which observations belong to which model. EM solves this by
+iterating: first \emph{guess} which model each point belongs to (E-step), then
+\emph{refit} the models using those guesses (M-step). The Hamilton filter is
+the E-step for Markov-switching models: it propagates regime probabilities
+forward through time, accounting for the Markov transition structure.
+
+Think of the filter as a ``belief update'': at each time step, your prior belief
+about the regime is updated by how well the new observation fits under each
+regime's model. High volatility in $y_t$ raises the probability of being in the
+high-variance recession regime.
+\end{intubox}
+
+\subsection{Why MSM has the worst Lucas performance despite correct specification}
+
+This is one of the most striking findings. The MSM is \emph{exactly} the right
+model for the simulated DGP, yet its post-break RMSE is the worst of all models
+(5.97 mild, 11.96 severe).
+
+The reason is the Hamilton filter. It uses the \emph{estimated} emission
+densities $\mathcal{N}(y_t;\,\hat\mu_k + \hat\phi_k y_{t-1},\,\hat\sigma_k^2)$
+to classify regimes. After the break, $\mu_k$ and $\sigma_k$ have changed, so
+the filter's emission densities are wrong. The filter confidently assigns the
+\emph{wrong} regime because it is looking for the old distribution. Post-break
+regime accuracy collapses from 75\% to 20\% (effectively random). Once the
+regime classification is wrong, the regime-specific forecasts become completely
+wrong too.
+
+\begin{notebox}
+\textbf{Key lesson.}
+Correct pre-break specification actually \emph{increases} Lucas vulnerability.
+A model that commits strongly to the true pre-break structure has further to
+fall when that structure changes. The MSM's precise identification of regimes
+is a liability, not an asset, when the regime structure itself shifts.
+\end{notebox}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 3: Threshold Autoregression (TAR)}
+
+\subsection{What it is}
+
+The TAR model divides the data into two regimes based on whether the lagged
+value of $y$ exceeds a threshold $\tau$:
+\[
+  y_t = \begin{cases}
+    \hat\beta_0^\top x_t & \text{if } y_{t-1} \leq \hat\tau \\
+    \hat\beta_1^\top x_t & \text{if } y_{t-1} > \hat\tau
+  \end{cases}
+\]
+
+The threshold $\hat\tau$ is chosen by grid search: try every candidate
+threshold (at quantiles from 15\% to 85\% of the distribution of $y_{t-1}$),
+and pick the one that minimises the total sum of squared residuals across both
+regimes. Features $x_t$ include $y_{t-1}$, rolling means, and covariates.
+
+\subsection{How it is estimated}
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Grid search for $\hat\tau$:} for each candidate threshold, split
+        the data and fit OLS/Ridge in each partition. Compute total SSR. Pick the
+        threshold that gives the lowest SSR.
+  \item \textbf{Re-fit Ridge regressors} on each partition using the chosen $\hat\tau$.
+\end{enumerate}
+
+\begin{intubox}
+\textbf{Intuition.}
+The TAR says: ``the economy behaves differently when growth was recently weak
+versus recently strong.'' The threshold is the boundary between these two
+states. If $y_{t-1}$ was below $\hat\tau$ (bad times recently), use one
+regression; if above (good times recently), use another.
+
+The grid search is asking: what value of last period's output best separates
+``expansion behaviour'' from ``recession behaviour''? It tries 50 candidate
+split-points and picks the one that produces the cleanest partition.
+\end{intubox}
+
+\subsection{Why TAR is relatively Lucas-stable}
+
+The threshold $\hat\tau$ is a hard cutoff in observable data ($y_{t-1}$), not
+in a latent state that depends on fitted emission densities. After the break,
+the TAR's regime classification is still driven by observable $y_{t-1}$
+relative to a fixed threshold. The threshold may not perfectly separate
+regimes any more, but it does not fail as catastrophically as the MSM's
+Gaussian filter. LSR = 1.64 (mild), 2.78 (severe) --- among the best.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 4: Hidden Markov Model + Ridge (HMM)}
+
+\subsection{What it is}
+
+The HMM is a \textbf{two-stage} pipeline:
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item A \textbf{Gaussian HMM} infers latent regimes from an enriched
+        feature vector.
+  \item A \textbf{Ridge regressor} is fitted separately for each inferred regime.
+\end{enumerate}
+
+The HMM is estimated on the \emph{observation matrix}:
+\[
+  \mathbf{O}_t = \bigl[y_t,\;y_{t-1},\;\bar{y}^{(5)}_t,\;s^{(5)}_t,\;\bar{y}^{(20)}_t\bigr]^\top
+\]
+where $\bar{y}^{(5)}$ is the 5-period rolling mean, $s^{(5)}$ is the rolling
+standard deviation, and $\bar{y}^{(20)}$ is the 20-period rolling mean.
+
+\subsection{How it is estimated: Baum-Welch EM}
+
+The HMM uses the same EM idea as the MSM, but the emission model is a
+multivariate Gaussian over $\mathbf{O}_t$ rather than a univariate one over
+$y_t$ alone.
+
+\medskip
+\textbf{E-step (Baum-Welch forward-backward algorithm):}
+\begin{itemize}[itemsep=2pt]
+  \item \emph{Forward pass}: compute $\alpha_t(k) = P(s_t=k,\,\mathbf{O}_{1:t})$
+        recursively, using the multivariate Gaussian emission probability of $\mathbf{O}_t$.
+  \item \emph{Backward pass}: compute $\beta_t(k) = P(\mathbf{O}_{t+1:T}\mid s_t=k)$.
+  \item \emph{Smoothed posteriors}: $\gamma_t(k) = P(s_t=k\mid \mathbf{O}_{1:T}) \propto \alpha_t(k)\,\beta_t(k)$.
+  \item \emph{Joint posteriors}: $\xi_t(j,k) = P(s_t=j,\,s_{t+1}=k\mid\mathbf{O}_{1:T})$.
+\end{itemize}
+
+\textbf{M-step:} update emission Gaussians (means and covariances) using the
+soft regime weights $\gamma_t(k)$, and update the transition matrix from
+$\xi_t(j,k)$.
+
+After convergence, \textbf{Viterbi decoding} finds the single most probable
+state sequence $s^*_{1:T}$, which is used to partition the training data for
+fitting the Ridge regressors.
+
+\textbf{At forecast time}, a \emph{causal forward filter} (no backward pass)
+identifies the current regime from past observations only.
+
+\subsection{The Viterbi algorithm}
+
+Viterbi is \emph{dynamic programming} applied to hidden Markov models. It
+finds the globally best path through the hidden states rather than the
+best local state at each step.
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Initialise:} $\log\delta_1(k) = \log\pi_k + \log b_k(\mathbf{O}_1)$.
+  \item \textbf{Recurse:} $\log\delta_t(k) = \max_j[\log\delta_{t-1}(j) + \log A_{jk}] + \log b_k(\mathbf{O}_t)$.\\
+        Store backpointer $\psi_t(k) = \arg\max_j[\log\delta_{t-1}(j) + \log A_{jk}]$.
+  \item \textbf{Backtrack:} start at $s^*_T = \arg\max_k\log\delta_T(k)$, then
+        follow backpointers backwards: $s^*_t = \psi_{t+1}(s^*_{t+1})$.
+\end{enumerate}
+
+Log-space is used throughout to avoid numerical underflow when multiplying
+many small probabilities.
+
+\begin{intubox}
+\textbf{Intuition.}
+Imagine a map where each column is a time step and each row is a possible
+regime. Viterbi fills in the map column by column: the entry $\delta_t(k)$
+records the probability of the best \emph{path} that ends at regime $k$ at
+time $t$ (not just the local probability). When it reaches the final column,
+it picks the best endpoint and traces back the entire path.
+
+The key difference from the forward filter: Viterbi gives a \textbf{hard}
+assignment (one definite regime per time step). The forward-backward smoother
+gives \textbf{soft} probabilities ($\gamma_t(k)\in(0,1)$). Both are
+$O(K^2 T)$ --- quadratic in regimes, linear in time.
+\end{intubox}
+
+\subsection{Why HMM is the most Lucas-stable model}
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{Richer observation matrix.} The HMM sees not just $y_t$ but
+        also 5- and 20-period rolling statistics. These slow-moving signals
+        carry information about the regime that does not change instantly after
+        a parameter shift, giving the forward filter more stable inputs.
+  \item \textbf{Soft regime assignments.} The forward filter outputs a
+        probability distribution over regimes at each step, not a hard decision.
+        After the break, when the emission densities are slightly wrong, the
+        filter spreads probability mass across regimes rather than committing
+        catastrophically to the wrong one.
+  \item \textbf{Decoupled regime detection and forecasting.} The HMM identifies
+        regimes independently of what the Ridge regressors predict. Even if the
+        Ridge weights are slightly wrong post-break, the regime classification is
+        not contaminated.
+  \item \textbf{Ridge regularisation.} Ridge shrinks regression weights towards
+        zero, reducing overfitting to the pre-break regime-specific patterns.
+\end{enumerate}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 5: Mixture of Experts (MoE)}
+
+\subsection{What it is}
+
+The Mixture of Experts is a \textbf{soft routing} model: rather than assigning
+each observation to exactly one regime, it blends the predictions of $K$
+``expert'' regressors using a \textbf{gating network} that assigns weights to
+each expert:
+\[
+  \hat{y}_t = \sum_{k=1}^K \pi_k(x_t)\cdot\hat\beta_k^\top x_t
+\]
+
+The gating weights $\pi_k(x_t) = P(\text{expert}=k\mid x_t)$ come from a
+logistic regression. The experts are Ridge regressors.
+
+\subsection{How it is estimated: EM with soft responsibilities}
+
+\textbf{E-step:} given current parameters, compute \emph{responsibilities}
+(which expert should ``own'' each observation):
+\[
+  r_{ik} = \frac{\pi_k(x_i)\cdot\mathcal{N}(y_i;\,\hat\beta_k^\top x_i,\,\hat\sigma_k^2)}
+              {\sum_j \pi_j(x_i)\cdot\mathcal{N}(y_i;\,\hat\beta_j^\top x_i,\,\hat\sigma_j^2)}
+\]
+
+The responsibility $r_{ik}$ is high for expert $k$ when: (a) the gating
+network assigns high probability to $k$ at $x_i$, \emph{and} (b) expert $k$'s
+prediction is close to the actual $y_i$.
+
+\textbf{M-step:} re-estimate the gating network (logistic regression on
+$(x_i, \arg\max_k r_{ik})$) and re-estimate each Ridge expert using the
+responsibilities as sample weights.
+
+\begin{intubox}
+\textbf{Intuition.}
+Think of three people (experts) each proposing a forecast, and a coordinator
+(the gating network) deciding how much to trust each person based on the current
+economic conditions. Each person learns only from the situations they are trusted
+to handle. The EM algorithm refines both the experts and the coordinator
+simultaneously: if an expert is more accurate, it gets more responsibility,
+which makes its weights better, which makes it more accurate.
+
+Unlike TAR or MSM, \emph{every} expert contributes to every forecast
+proportionally to its gating weight. This ``soft'' blending provides partial
+regularisation: a misclassified observation in the wrong regime does not
+completely corrupt the forecast, it just reduces the correct expert's weight.
+\end{intubox}
+
+\subsection{Difference from HMM}
+
+The MoE has no Markov chain. Each time step's regime probability is determined
+solely by the current $x_t$, with no memory of the previous regime. The HMM
+tracks how regimes evolve over time via the transition matrix; the MoE treats
+each step independently. This makes MoE faster to estimate but means it cannot
+learn that ``recessions last 10 periods on average.''
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 6: ML Regime (XGB)}
+
+\subsection{What it is}
+
+The ML Regime model uses a three-stage pipeline:
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{KMeans clustering}: cluster training observations into
+        $K=2$ groups using lags, rolling statistics, and covariates. These
+        clusters serve as pseudo-regime labels. No economics assumed ---
+        purely data-driven.
+  \item \textbf{XGBClassifier}: train a gradient-boosted classifier to
+        reproduce those cluster labels from the same feature set. This gives
+        a smooth, interpretable mapping from features to regime probabilities.
+  \item \textbf{Per-regime XGBRegressors}: train one XGBoost regressor on
+        each regime's subset of training data.
+\end{enumerate}
+
+\subsection{How XGBoost works}
+
+XGBoost builds an \textbf{ensemble of decision trees} in sequence. Each tree
+tries to correct the errors of all previous trees. The prediction is the sum of
+all tree outputs:
+\[
+  \hat{y}_t = \sum_{m=1}^M f_m(x_t)
+\]
+where each $f_m$ is a small decision tree. Trees are added greedily: at each
+step, find the tree $f_m$ that most reduces the loss on the current residuals.
+
+Decision trees work by splitting the feature space: ``if rolling std $> 2.1$
+AND lag-1 $< -0.5$, predict $-1.3$; else predict $+0.4$''. XGBoost's output is
+therefore a \textbf{piecewise-constant function}: the feature space is divided
+into rectangular regions, each with a constant prediction.
+
+\begin{intubox}
+\textbf{Intuition.}
+Imagine drawing a very detailed decision flowchart for predicting output:
+``If the economy was below $-0.5$ last month AND volatility was above $2.1$,
+AND it rained in Des Moines...'' With 200 trees and no restraint, XGBoost can
+carve the feature space into tiny boxes, each perfectly fitting the training
+observations inside it. This is the memorisation that causes its spectacular
+collapse after the structural break.
+
+The piecewise-constant nature is the key vulnerability. Once the DGP shifts,
+the box boundaries (learned from pre-break data) no longer correspond to
+meaningful divisions. But because the boxes are rigid, the model cannot
+interpolate between them --- it just outputs the wrong pre-break average for
+each new observation that lands in an old box.
+\end{intubox}
+
+\subsection{Why XGB is the most Lucas-vulnerable model}
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{Frozen KMeans boundaries.} The regime classifier uses cluster
+        centroids fixed at training time. Post-break, the same boundaries
+        systematically misclassify regimes.
+  \item \textbf{Piecewise-constant extrapolation.} Unlike polynomials or neural
+        networks, tree predictions do not interpolate smoothly between training
+        points. A post-break observation that falls in a region with no training
+        data gets the pre-break average for that region --- which may be
+        arbitrarily wrong.
+  \item \textbf{Extreme in-sample fit.} Pre-break RMSE of 0.40 --- about $4\times$
+        lower than the next best model --- reflects memorisation of the training
+        data. This also inflates the LSR denominator, making the ratio look worse
+        than it is in absolute terms.
+\end{enumerate}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 7: Markov Switching Neural Network (MSNN)}
+
+\subsection{What it is}
+
+The MSNN combines:
+\begin{itemize}[itemsep=3pt]
+  \item \textbf{A Markov chain} governing regime transitions (like the MSM).
+  \item \textbf{Per-regime MLP experts} that produce forecasts (instead of
+        linear regressions).
+\end{itemize}
+
+The data-generating assumption is:
+\[
+  y_t = f_{s_t}(x_t) + \sigma_{s_t}\,\varepsilon_t, \qquad s_{t}\mid s_{t-1}\sim P
+\]
+where each $f_k$ is a small feedforward neural network.
+
+\subsection{The MLP (Multi-Layer Perceptron)}
+
+Each expert is an MLP with architecture $n_\text{feat} \to 32 \to 16 \to 1$:
+
+\begin{itemize}[itemsep=2pt]
+  \item \textbf{Input layer}: the feature vector $x_t$ (lags, rolling stats, covariates).
+  \item \textbf{Hidden layer 1 (32 neurons)}: each neuron computes $\text{ReLU}(w^\top x + b)$.
+        ReLU means ``zero if negative, identity if positive'' --- it introduces
+        nonlinearity while remaining computationally simple.
+  \item \textbf{Hidden layer 2 (16 neurons)}: same structure.
+  \item \textbf{Output layer (1 neuron)}: linear combination of the 16 hidden
+        activations, producing a scalar forecast.
+\end{itemize}
+
+\begin{intubox}
+\textbf{Intuition.}
+The MLP can represent arbitrarily complex nonlinear functions, given enough
+neurons. Think of it as a very flexible curve-fitter: rather than assuming
+$y_t$ depends \emph{linearly} on lagged values, the MLP can learn any smooth
+relationship from the training data. Mathematically, a two-layer ReLU network
+is a piecewise-\emph{linear} function of the inputs (unlike XGBoost's
+piecewise-\emph{constant} output), which allows it to interpolate between
+training points rather than jumping to flat plateaus.
+\end{intubox}
+
+\subsection{How it is estimated: EM with Adam}
+
+The MSNN uses the same EM structure as the MSM and HMM, but the M-step updates
+MLPs via gradient descent instead of closed-form weighted OLS.
+
+\medskip
+\textbf{E-step (Hamilton forward-backward filter):}
+Same as the MSM, but the emission probability $P(y_t\mid s_t=k)$ is computed
+from the MLP's prediction: $\mathcal{N}(y_t;\,f_k(x_t),\,\sigma_k^2)$.
+
+Run the forward filter:
+\[
+  \log\alpha_t(k) = \log\sum_j e^{\log\alpha_{t-1}(j) + \log P_{jk}} + \log p(y_t\mid s_t=k)
+\]
+Then the backward filter, and combine to get smoothed posteriors $\gamma_t(k)$.
+
+\textbf{M-step (Adam for MLP, analytical for transition matrix):}
+
+\begin{itemize}[itemsep=3pt]
+  \item \textbf{Transition matrix}: $\hat{P}_{jk} \propto \sum_t \xi_t(j,k)$.
+        This is just counting weighted transitions --- no gradient needed.
+  \item \textbf{MLP experts}: minimise the weighted loss
+        $\mathcal{L}_k = \sum_t \gamma_t(k)\,(y_t - f_k(x_t))^2$
+        using the \textbf{Adam} optimiser. Adam adjusts the learning rate
+        individually for each weight based on the recent history of gradients.
+\end{itemize}
+
+\begin{intubox}
+\textbf{Adam intuition.}
+Imagine walking downhill (gradient descent) to find the lowest point in a
+landscape. Vanilla gradient descent takes equal-sized steps in the direction of
+steepest descent. Adam keeps a running average of the gradient direction
+(\emph{momentum}) and a running average of the squared gradient magnitude
+(\emph{adaptive scaling}). This means it takes bigger steps when the gradient
+has been consistently pointing in one direction, and smaller steps when
+gradients have been noisy. In practice this converges much faster and more
+reliably than plain gradient descent for neural networks.
+\end{intubox}
+
+\subsection{The MSNN's paradox}
+
+The MSNN has:
+\begin{itemize}[itemsep=2pt]
+  \item \textbf{Worst regime identification}: in-sample regime accuracy $\approx 51\%$
+        (near random). The EM collapsed to a single dominant regime; the Markov
+        chain stopped being meaningful.
+  \item \textbf{Best absolute post-break RMSE}: 2.493 (mild), 3.391 (severe) --- the
+        lowest of all models in every experiment.
+\end{itemize}
+
+How? Because the MLP experts are smooth universal approximators. Even if the
+Markov structure has collapsed, the MLP can learn a good overall nonlinear
+mapping from $x_t$ to $y_t$. Post-break, the MLP \emph{extrapolates smoothly}
+outside the training distribution, whereas XGBoost's step functions return
+stale pre-break box averages.
+
+\begin{notebox}
+\textbf{Why smooth extrapolation is important for the Lucas Critique.}
+After a structural break, test observations lie in a region of feature space
+that training data only partially covers. Smooth functions (MLPs) extrapolate
+by continuing the learned smooth relationship into this new region. Piecewise-
+constant functions (XGBoost trees) return the average of the nearest training
+box, which may be far from the new distribution. This is why the MSNN wins on
+absolute accuracy despite its poor in-sample regime identification.
+\end{notebox}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Model 8: Model Average (Ensemble)}
+
+\subsection{What it is}
+
+The model average simply takes the \textbf{equal-weight mean} of all other
+models' predictions at each time step:
+\[
+  \hat{y}_t^\text{avg} = \frac{1}{N}\sum_{n=1}^N \hat{y}_t^{(n)}
+\]
+
+No additional estimation is needed --- it is computed at prediction time only.
+
+\subsection{Why it works}
+
+The theoretical justification comes from the bias-variance trade-off. If
+individual models have correlated errors, averaging reduces variance but does
+not hurt bias much. But more relevantly here: the forecast risk decomposition
+shows that the model class $\mathcal{F}$ contributes an \emph{approximation
+error} term. Averaging across models with different functional forms effectively
+expands $\mathcal{F}$, reducing the approximation error component.
+
+\begin{intubox}
+\textbf{Intuition.}
+If one expert is wrong in one direction and another is wrong in the other
+direction, averaging them gets you closer to the truth. More formally: even if
+no single model has the right functional form for the new regime, the average
+of models with diverse functional forms is likely to be closer to the truth
+than any individual model. In 2 out of 4 experiments, the ensemble produces
+both a lower LSR and lower absolute post-break RMSE than most individual models.
+\end{intubox}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Feature Engineering}
+
+All models (except AR/ARMA and the raw MSM) use the same feature set:
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  Feature & Formula & Intuition \\
+  \midrule
+  \texttt{y\_lag1} & $y_{t-1}$ & Most recent value \\
+  \texttt{y\_lag2} & $y_{t-2}$ & Two-period lag \\
+  \texttt{roll\_mean\_5} & $\bar{y}^{(5)}_t = \frac{1}{5}\sum_{i=0}^4 y_{t-i}$ & Short-run trend \\
+  \texttt{roll\_std\_5} & $s^{(5)}_t$ & Short-run volatility \\
+  \texttt{roll\_mean\_20} & $\bar{y}^{(20)}_t$ & Long-run trend \\
+  \texttt{roll\_std\_20} & $s^{(20)}_t$ & Long-run volatility \\
+  \texttt{exog\_0} & EFFR (simulated) / EFFR (real) & Interest rate level \\
+  \texttt{exog\_1} & Simulated / UNRATE & Labour market \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The rolling statistics are particularly important for the HMM. The HMM
+observation matrix uses $[\bar{y}^{(5)}, s^{(5)}, \bar{y}^{(20)}]$ rather
+than raw $y$ values, because regime transitions are more reliably detected from
+slow-moving summary statistics than from a single noisy observation.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Summary: How Each Model Answers the Fundamental Question}
+
+\begin{center}
+\small
+\begin{tabular}{p{2.5cm}p{3.5cm}p{3.5cm}p{3.5cm}}
+  \toprule
+  \textbf{Model} & \textbf{How does it find regimes?} & \textbf{How does it forecast?} & \textbf{Lucas vulnerability} \\
+  \midrule
+  AR(2) / ARMA & Doesn't --- one global model & Linear in lags & Moderate: no regime assumptions to break \\
+  \addlinespace
+  MSM & Hamilton EM filter on $y_t$ & Regime-probability-weighted AR & \textcolor{darkred}{High}: emission densities wrong post-break; filter collapses \\
+  \addlinespace
+  TAR & Grid-search threshold in $y_{t-1}$ & Per-regime Ridge (hard split) & Low-moderate: observable threshold, no latent state to misidentify \\
+  \addlinespace
+  HMM & Baum-Welch EM on rolling-feature matrix & Per-regime Ridge (soft split) & \textcolor{mygreen}{Low}: soft posteriors, rich observation matrix \\
+  \addlinespace
+  MoE & Logistic gating via EM & Responsibility-weighted Ridge & Moderate: soft but no Markov memory \\
+  \addlinespace
+  ML XGB & KMeans $\to$ XGB classifier & Per-regime XGBRegressor & \textcolor{darkred}{Very high}: frozen boundaries + piecewise constant \\
+  \addlinespace
+  MSNN & Markov + MLP (EM) & Per-regime MLP & High LSR / \textcolor{mygreen}{Low abs. RMSE}: MLP smooth extrapolation \\
+  \addlinespace
+  Ensemble & --- & Equal-weight average & Low: diversification reduces approximation error \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+\begin{greenbox}
+\textbf{The big picture.}
+Every model in this project answers the same question: ``given what I know
+about the economy's past, which \emph{mode} is it currently in, and how should
+I forecast from that mode?''
+
+The models differ in three key dimensions:
+\begin{enumerate}[itemsep=2pt]
+  \item \textbf{How they find the mode} (hard threshold, probabilistic filter,
+        clustering, EM with Markov chain).
+  \item \textbf{How flexible the forecast is} within each mode (OLS, Ridge,
+        XGBoost trees, MLP).
+  \item \textbf{How much they commit to the pre-break mode structure} (MSM
+        commits maximally; HMM commits softly; MSNN commits to functional form
+        but not regime structure).
+\end{enumerate}
+
+The central finding --- flexible latent-state estimation beats flexible
+functional form --- can be rephrased simply: it is better to remain uncertain
+about \emph{which mode you are in} (HMM's soft posteriors) than to be very
+certain about \emph{what function to use} within a mode (XGBoost's trees).
+After a structural break, the mode boundaries shift. Uncertain regime
+assignments partially absorb this; rigid functional forms cannot.
+\end{greenbox}
+
+\end{document}
