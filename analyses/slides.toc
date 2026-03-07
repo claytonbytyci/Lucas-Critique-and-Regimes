@@ -1,8 +1,0 @@
-\beamer@sectionintoc {1}{Motivation \& Research Question}{3}{0}{1}
-\beamer@sectionintoc {2}{Literature Review}{5}{0}{2}
-\beamer@sectionintoc {3}{Data}{6}{0}{3}
-\beamer@sectionintoc {4}{Methodology}{7}{0}{4}
-\beamer@sectionintoc {5}{Implementation Details}{9}{0}{5}
-\beamer@sectionintoc {6}{Results}{13}{0}{6}
-\beamer@sectionintoc {7}{Discussion}{16}{0}{7}
-\beamer@sectionintoc {8}{Conclusion}{19}{0}{8}
