@@ -28,24 +28,6 @@ pip install -e ".[dev]"
 
 This installs the `src/` layout as an importable package alongside dev tools (`pytest`, `pre-commit`).
 
-### 3. (Optional) Set up pre-commit hooks
-
-```bash
-pre-commit install
-```
-
-### 4. (Optional) FRED API key for real-world data
-
-To run the real-world analysis notebook you need a free [FRED API key](https://fred.stlouisfed.org/docs/api/api_key.html). Set it as an environment variable:
-
-```bash
-export FRED_API_KEY="your_key_here"
-```
-
-Or add it to a `.env` file in the project root (not committed).
-
----
-
 ## Running
 
 ### Jupyter notebooks
@@ -62,18 +44,6 @@ Open notebooks in `analyses/` in order:
 | `02_model_comparison.ipynb` | In-sample regime recovery across models |
 | `03_lucas_critique_analysis.ipynb` | Core experiment: mild and severe shifts |
 | `05_real_world_analysis.ipynb` | Application to CPI and Industrial Production |
-
-### Run the experiment programmatically
-
-```python
-from src.simulation.dgp import MarkovSwitchingDGP
-from src.pipeline.experiment import LucasCritiqueExperiment
-
-dgp = MarkovSwitchingDGP(n_regimes=2, seed=42)
-experiment = LucasCritiqueExperiment(dgp=dgp, break_fraction=0.6)
-results = experiment.run()
-print(results.summary)
-```
 
 ### Run tests
 
@@ -99,10 +69,3 @@ data/
 tests/            # Unit tests for all modules
 ```
 
----
-
-## References
-
-- Lucas, R. E. (1976). Econometric policy evaluation: A critique. *Carnegie-Rochester Conference Series on Public Policy*, 1, 19–46.
-- Hamilton, J. D. (1989). A new approach to the economic analysis of nonstationary time series. *Econometrica*, 57(2), 357–384.
-- Teräsvirta, T. (1994). Specification, estimation, and evaluation of smooth transition autoregressive models. *JASA*, 89(425), 208–218.
