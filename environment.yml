@@ -20,6 +20,8 @@ dependencies:
   # plots
   - matplotlib
   - seaborn
+  # http / api
+  - requests
   # econometrics / stats
   - statsmodels
   # ml / regime models

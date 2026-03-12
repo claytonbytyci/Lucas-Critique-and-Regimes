@@ -1,74 +1,108 @@
 # Lucas Critique and Regime-Switching Models
 
-## Overview
+This project examines whether machine-learning regime-switching models are more robust to structural breaks than classical econometric approaches. It operationalises the Lucas Critique (Lucas, 1976) by simulating Markov-switching time series, applying a known parameter shift at a break point, and comparing how eight different models degrade in out-of-sample performance.
 
-This project investigates a fundamental tension in macroeconometrics: the **Lucas Critique** (Lucas, 1976) applied to **regime-switching models**.
+The key metric is the **Lucas Sensitivity Ratio (LSR)**: `(post-break RMSE − pre-break RMSE) / pre-break RMSE`. Models are compared across mild and severe structural shifts, and validated on real macroeconomic data via the FRED API.
 
-The Lucas Critique argues that econometric models estimated on historical data become unreliable when policies change, because rational agents alter their behaviour in response to new regimes. This is particularly acute for regime-switching models, which explicitly learn regime parameters from data — parameters that may shift after a structural break.
-
-### Research Question
-
-> *Do machine-learning regime-switching models exhibit greater structural stability than classical Markov-switching regression models in the presence of Lucas-critique-type parameter shifts?*
-
-## Key Models
-
-| Model | Family | Library |
-|---|---|---|
-| Markov Switching Regression | Classical | `statsmodels` |
-| Hidden Markov Model (HMM) | Semi-classical | `hmmlearn` |
-| Threshold Autoregression (TAR) | Classical nonlinear | `scipy` / `numpy` |
-| ML Regime Switcher (XGBoost + Clustering) | ML | `scikit-learn`, `xgboost` |
-| Mixture of Experts | ML | `scikit-learn` |
-| Markov Switching Neural Network (MSNN) | ML-classical hybrid | `numpy` (pure) |
-
-## Experimental Design
-
-1. **Simulate** a Markov-switching AR(1) process with known regimes and parameters.
-2. **Apply a Lucas shift**: after a structural break, alter the DGP parameters (simulating a policy change that rational agents respond to).
-3. **Train** all models on pre-break data.
-4. **Evaluate** all models on post-break data.
-5. **Compare** performance degradation — the Lucas Sensitivity Ratio (LSR).
-
-## Project Structure
-
-```
-src/
-├── simulation/   # DGP and structural break utilities
-├── models/       # Classical and ML regime-switching models
-├── evaluation/   # Metrics, Lucas-critique tests, visualisation
-└── pipeline/     # Experiment orchestration
-
-analyses/
-├── 01_simulation_eda.ipynb        # DGP exploration
-├── 02_model_comparison.ipynb      # In-sample regime recovery
-└── 03_lucas_critique_analysis.ipynb  # Core Lucas critique experiment
-
-tests/            # Unit tests for all modules
-data/simulated/   # Parquet outputs from DGP
-```
+---
 
 ## Setup
+
+### Requirements
+
+- [Conda](https://docs.conda.io/en/latest/miniconda.html) (Miniconda or Anaconda)
+- Python ≥ 3.9
+
+### 1. Create the environment
 
 ```bash
 conda env create -f environment.yml
 conda activate lucas-regimes
-pip install -e .[dev]
 ```
 
-## Usage
+### 2. Install the package in editable mode
+
+```bash
+pip install -e ".[dev]"
+```
+
+This installs the `src/` layout as an importable package alongside dev tools (`pytest`, `pre-commit`).
+
+### 3. (Optional) Set up pre-commit hooks
+
+```bash
+pre-commit install
+```
+
+### 4. (Optional) FRED API key for real-world data
+
+To run the real-world analysis notebook you need a free [FRED API key](https://fred.stlouisfed.org/docs/api/api_key.html). Set it as an environment variable:
+
+```bash
+export FRED_API_KEY="your_key_here"
+```
+
+Or add it to a `.env` file in the project root (not committed).
+
+---
+
+## Running
+
+### Jupyter notebooks
+
+```bash
+jupyter lab
+```
+
+Open notebooks in `analyses/` in order:
+
+| Notebook | Content |
+|---|---|
+| `01_simulation_eda.ipynb` | DGP properties and regime diagnostics |
+| `02_model_comparison.ipynb` | In-sample regime recovery across models |
+| `03_lucas_critique_analysis.ipynb` | Core experiment: mild and severe shifts |
+| `05_real_world_analysis.ipynb` | Application to CPI and Industrial Production |
+
+### Run the experiment programmatically
 
 ```python
-from simulation import MarkovSwitchingDGP, apply_lucas_shift
-from models import MarkovSwitchingModel, HMMRegimeModel, ThresholdModel, MLRegimeModel
-from pipeline import LucasCritiqueExperiment
+from src.simulation.dgp import MarkovSwitchingDGP
+from src.pipeline.experiment import LucasCritiqueExperiment
 
 dgp = MarkovSwitchingDGP(n_regimes=2, seed=42)
 experiment = LucasCritiqueExperiment(dgp=dgp, break_fraction=0.6)
 results = experiment.run()
+print(results.summary)
 ```
+
+### Run tests
+
+```bash
+pytest
+```
+
+---
+
+## Project structure
+
+```
+src/
+├── simulation/   # Markov-switching DGP and structural break utilities
+├── models/       # Eight regime-switching models (classical, ML, hybrid)
+├── evaluation/   # Forecast metrics, Chow test, CUSUM, LSR
+└── pipeline/     # Experiment orchestration
+
+analyses/         # Jupyter notebooks and generated figures
+data/
+├── simulated/    # Parquet and CSV outputs from experiments
+└── real_world/   # FRED macroeconomic series
+tests/            # Unit tests for all modules
+```
+
+---
 
 ## References
 
 - Lucas, R. E. (1976). Econometric policy evaluation: A critique. *Carnegie-Rochester Conference Series on Public Policy*, 1, 19–46.
 - Hamilton, J. D. (1989). A new approach to the economic analysis of nonstationary time series. *Econometrica*, 57(2), 357–384.
-- Teräsvirta, T. (1994). Specification, estimation, and evaluation of smooth transition autoregressive models. *Journal of the American Statistical Association*, 89(425), 208–218.
+- Teräsvirta, T. (1994). Specification, estimation, and evaluation of smooth transition autoregressive models. *JASA*, 89(425), 208–218.

@@ -1,4 +1,23 @@
-### Build configuration for setuptools-based package
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "lucas-critique-regimes"
+version = "0.1.0"
+description = "Regime-switching models and the Lucas Critique: classical vs ML approaches"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = [
+    "pandas",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "statsmodels",
+    "hmmlearn",
+    "xgboost",
+    "matplotlib",
+    "seaborn",
+    "pyarrow",
+    "requests",
+]
