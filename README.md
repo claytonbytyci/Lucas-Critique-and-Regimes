@@ -48,7 +48,7 @@ Open notebooks in `analyses/` in order:
 ### Run tests
 
 ```bash
-pytest
+pytest tests/
 ```
 
 ---
@@ -69,3 +69,6 @@ data/
 tests/            # Unit tests for all modules
 ```
 
+## AI Acknowledgement
+
+This repository was developed with the assistance of AI, which provided code suggestions, debugging help, and documentation support, especially for the development of tests and graphing. All key and final coding decisions on implementation and analysis were made by myself, the author.
