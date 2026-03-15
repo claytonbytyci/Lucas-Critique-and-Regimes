@@ -2,7 +2,7 @@
 
 This project examines whether machine-learning regime-switching models are more robust to structural breaks than classical econometric approaches. It operationalises the Lucas Critique (Lucas, 1976) by simulating Markov-switching time series, applying a known parameter shift at a break point, and comparing how eight different models degrade in out-of-sample performance.
 
-The key metric is the **Lucas Sensitivity Ratio (LSR)**: `(post-break RMSE − pre-break RMSE) / pre-break RMSE`. Models are compared across mild and severe structural shifts, and validated on real macroeconomic data via the FRED API.
+Models are compared across mild and severe structural shifts, and validated on real macroeconomic data via the FRED API.
 
 ---
 
